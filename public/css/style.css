@@ -172,26 +172,30 @@ a { text-decoration: none; color: inherit; }
 
 /* Hero Tags */
 .hero-tags {
-  display: flex; gap: 15px; justify-content: center; margin-bottom: 30px;
+  display: flex; gap: 12px; justify-content: center; margin-bottom: 30px;
   animation: fadeInUp 0.8s ease 0.5s both;
   flex-wrap: wrap;
 }
 
 .hero-tag {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: rgba(255,255,255,0.1);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(197,165,114,0.3);
-  padding: 8px 18px; border-radius: 25px;
-  color: var(--white); font-size: 0.9rem; font-weight: 500;
+  display: inline-flex; align-items: center; gap: 8px;
+  background: linear-gradient(135deg, rgba(197,165,114,0.25), rgba(197,165,114,0.1));
+  border: 1px solid rgba(197,165,114,0.5);
+  padding: 10px 22px; border-radius: 30px;
+  color: var(--white); font-size: 0.9rem; font-weight: 600;
   transition: var(--transition);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
 .hero-tag:hover {
-  background: rgba(197,165,114,0.2);
+  background: linear-gradient(135deg, rgba(197,165,114,0.5), rgba(197,165,114,0.25));
   border-color: var(--gold);
-  transform: translateY(-2px);
+  transform: translateY(-3px);
+  box-shadow: 0 5px 20px rgba(197,165,114,0.3);
 }
-.hero-tag i { color: var(--gold); font-size: 0.85rem; }
+.hero-tag i {
+  color: var(--gold); font-size: 0.95rem;
+  filter: drop-shadow(0 1px 3px rgba(197,165,114,0.5));
+}
 
 .hero-btn {
   display: inline-flex; align-items: center; gap: 10px;
