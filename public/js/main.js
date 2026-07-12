@@ -1,6 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
   initNavbar();
   initHeroSlider();
+  initHeroParticles();
+  initTypingEffect();
   loadProducts();
   loadContact();
   loadCounters();
@@ -71,6 +73,83 @@ function initHeroSlider() {
 
   resetInterval();
 }
+
+// ===== HERO PARTICLES =====
+function initHeroParticles() {
+  const container = document.getElementById('heroParticles');
+  if (!container) return;
+
+  for (let i = 0; i < 20; i++) {
+    const particle = document.createElement('div');
+    particle.className = 'hero-particle';
+    const size = Math.random() * 30 + 10;
+    particle.style.width = size + 'px';
+    particle.style.height = size + 'px';
+    particle.style.left = Math.random() * 100 + '%';
+    particle.style.animationDuration = (Math.random() * 15 + 10) + 's';
+    particle.style.animationDelay = (Math.random() * 10) + 's';
+    container.appendChild(particle);
+  }
+}
+
+// ===== TYPING EFFECT =====
+function initTypingEffect() {
+  const el = document.getElementById('typingText');
+  if (!el) return;
+
+  const phrases = [
+    'أثاث فاخر يعكس ذوقك الرفيع',
+    'تشكيلة فريدة من أرقى الماركات',
+    'تصميم عصري بلمسة كلاسيكية',
+    'جودة لا تُضاهى بأفضل الأسعار'
+  ];
+
+  let phraseIndex = 0;
+  let charIndex = 0;
+  let isDeleting = false;
+
+  function type() {
+    const current = phrases[phraseIndex];
+
+    if (isDeleting) {
+      el.textContent = current.substring(0, charIndex - 1);
+      charIndex--;
+    } else {
+      el.textContent = current.substring(0, charIndex + 1);
+      charIndex++;
+    }
+
+    let speed = isDeleting ? 40 : 80;
+
+    if (!isDeleting && charIndex === current.length) {
+      speed = 2500;
+      isDeleting = true;
+    } else if (isDeleting && charIndex === 0) {
+      isDeleting = false;
+      phraseIndex = (phraseIndex + 1) % phrases.length;
+      speed = 400;
+    }
+
+    setTimeout(type, speed);
+  }
+
+  setTimeout(type, 800);
+}
+
+// ===== PARALLAX ON SCROLL =====
+window.addEventListener('scroll', () => {
+  const hero = document.querySelector('.hero');
+  if (!hero) return;
+  const scrolled = window.scrollY;
+  if (scrolled < window.innerHeight) {
+    hero.style.backgroundPositionY = scrolled * 0.3 + 'px';
+    const content = hero.querySelector('.hero-content');
+    if (content) {
+      content.style.transform = `translateY(calc(-50% + ${scrolled * 0.15}px))`;
+      content.style.opacity = 1 - (scrolled / (window.innerHeight * 0.8));
+    }
+  }
+});
 
 // ===== PRODUCTS =====
 async function loadProducts() {

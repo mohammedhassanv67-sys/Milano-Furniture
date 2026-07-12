@@ -32,6 +32,7 @@
       <div class="hero-slide active" style="background-image: url('/images/hero/hero1.jpg');"></div>
       <div class="hero-slide" style="background-image: url('/images/hero/hero2.jpg');"></div>
     </div>
+    <div class="hero-particles" id="heroParticles"></div>
     <div class="hero-dots">
       <div class="hero-dot active" data-slide="0"></div>
       <div class="hero-dot" data-slide="1"></div>
@@ -41,10 +42,23 @@
         <img src="/images/logo/logo.png" alt="Milano Logo" onerror="this.innerHTML='<i class=\fas fa-couch\ style=\font-size:2.5rem;color:#C5A572\>'">
       </div>
       <h1 class="hero-title"><span>Milano</span> Furniture</h1>
-      <p class="hero-subtitle">أثاث فاخر يعكس ذوقك الرفيع</p>
-      <a href="#gallery" class="hero-btn">اكتشف المعرض</a>
+      <p class="hero-subtitle"><span class="typing-text" id="typingText"></span><span class="typing-cursor">|</span></p>
+      <div class="hero-tags">
+        <span class="hero-tag"><i class="fas fa-gem"></i> جودة عالية</span>
+        <span class="hero-tag"><i class="fas fa-truck"></i> توصيل مجاني</span>
+        <span class="hero-tag"><i class="fas fa-shield-alt"></i> ضمان سنة</span>
+      </div>
+      <a href="#gallery" class="hero-btn">
+        <span>اكتشف المعرض</span>
+        <i class="fas fa-arrow-left"></i>
+      </a>
     </div>
-    <div class="scroll-indicator"><i class="fas fa-chevron-down"></i></div>
+    <div class="scroll-indicator">
+      <span class="scroll-text">اسحب للأسفل</span>
+      <div class="scroll-mouse">
+        <div class="scroll-wheel"></div>
+      </div>
+    </div>
   </section>
 
   <!-- Counter Section -->
