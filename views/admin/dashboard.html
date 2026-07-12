@@ -128,26 +128,26 @@
       </div>
       <div style="padding:20px;">
         <p style="margin-bottom:15px; color:#666;">
-          حمّل نسخة احتياطية من قاعدة البيانات قبل أي تعديل أو نقل. يمكنك أيضاً استعادة نسخة سابقة.
+          حمّل نسخة احتياطية من جميع البيانات (منتجات، حسابات، إعدادات، رسائل) قبل أي تعديل أو نقل.
         </p>
         <div style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
-          <a href="/api/backup/download" class="btn btn-primary" id="btnDownloadDb">
+          <button class="btn btn-primary" id="btnDownloadDb" onclick="downloadDbBackup()">
             <i class="fas fa-database"></i> تحميل قاعدة البيانات فقط
-          </a>
+          </button>
           <button class="btn btn-info" id="btnDownloadAll" onclick="downloadFullBackup()">
-            <i class="fas fa-download"></i> تحميل نسخة كاملة (قاعدة + صور)
+            <i class="fas fa-download"></i> تحميل نسخة كاملة (كل البيانات)
           </button>
         </div>
         <div style="border-top:1px solid #eee; padding-top:15px;">
           <h3 style="margin-bottom:10px; font-size:1rem;">استعادة نسخة احتياطية</h3>
           <form id="restoreForm" enctype="multipart/form-data" style="display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
-            <input type="file" name="database" accept=".db,.sqlite,.sqlite3" required
+            <input type="file" name="database" accept=".db,.sqlite,.sqlite3,.json" required
                    style="padding:8px; border:1px solid #ddd; border-radius:6px;">
             <button type="submit" class="btn btn-success" id="btnRestore">
               <i class="fas fa-upload"></i> استعادة
             </button>
           </form>
-          <p style="font-size:0.8rem; color:#999; margin-top:8px;">الملف المدعوم: .db فقط</p>
+          <p style="font-size:0.8rem; color:#999; margin-top:8px;">الملفات المدعومة: .db (قاعدة بيانات) أو .json (نسخة كاملة)</p>
         </div>
       </div>
     </div>
@@ -258,25 +258,52 @@
       }
     }
 
+    async function downloadDbBackup() {
+      const btn = document.getElementById('btnDownloadDb');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحميل...';
+      try {
+        const res = await fetch('/api/backup/download');
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'خطأ غير معروف' }));
+          throw new Error(err.error || 'Failed');
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'milano-db-backup-' + new Date().toISOString().slice(0,10) + '.db';
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        alert('حدث خطأ: ' + e.message);
+      }
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-database"></i> تحميل قاعدة البيانات فقط';
+    }
+
     async function downloadFullBackup() {
       const btn = document.getElementById('btnDownloadAll');
       btn.disabled = true;
       btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التجهيز...';
       try {
         const res = await fetch('/api/backup/download-all');
-        if (!res.ok) throw new Error('Failed');
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'خطأ غير معروف' }));
+          throw new Error(err.error || 'Failed');
+        }
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'milano-full-backup-' + new Date().toISOString().slice(0,10) + '.zip';
+        a.download = 'milano-full-backup-' + new Date().toISOString().slice(0,10) + '.json';
         a.click();
         URL.revokeObjectURL(url);
       } catch (e) {
-        alert('حدث خطأ أثناء تحميل النسخة الاحتياطية');
+        alert('حدث خطأ: ' + e.message);
       }
       btn.disabled = false;
-      btn.innerHTML = '<i class="fas fa-download"></i> تحميل نسخة كاملة (قاعدة + صور)';
+      btn.innerHTML = '<i class="fas fa-download"></i> تحميل نسخة كاملة (كل البيانات)';
     }
 
     document.getElementById('restoreForm').addEventListener('submit', async (e) => {

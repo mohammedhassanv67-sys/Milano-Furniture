@@ -172,4 +172,4 @@ async function initDatabase() {
   console.log('Database initialized successfully');
 }
 
-module.exports = { initDatabase, run, get, all, saveDb };
+module.exports = { initDatabase, run, get, all, saveDb, dbPath };

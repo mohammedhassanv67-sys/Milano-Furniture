@@ -7,7 +7,7 @@ const multer = require('multer');
 const QRCode = require('qrcode');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const { initDatabase, run, get, all, saveDb } = require('./database/init');
+const { initDatabase, run, get, all, saveDb, dbPath } = require('./database/init');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -652,33 +652,37 @@ app.get('/api/qr/:productId', async (req, res) => {
 // ===== BACKUP & RESTORE ROUTES =====
 app.get('/api/backup/download', requireAuth, (req, res) => {
   try {
+    if (!fs.existsSync(dbPath)) {
+      return res.status(404).json({ error: 'قاعدة البيانات غير موجودة' });
+    }
     const dbFile = fs.readFileSync(dbPath);
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', 'attachment; filename=milano-db-backup-' + new Date().toISOString().slice(0,10) + '.db');
     res.send(dbFile);
   } catch (err) {
-    res.status(500).json({ error: 'فشل تحميل النسخة الاحتياطية' });
+    res.status(500).json({ error: 'فشل تحميل النسخة الاحتياطية: ' + err.message });
   }
 });
 
-app.get('/api/backup/download-all', requireAuth, async (req, res) => {
+app.get('/api/backup/download-all', requireAuth, (req, res) => {
   try {
-    const archiver = require('archiver');
-    const { PassThrough } = require('stream');
-    const archive = archiver('zip', { zlib: { level: 9 } });
-    const stream = new PassThrough();
-    archive.pipe(stream);
-    archive.file(dbPath, { name: 'milano.db' });
-    const uploadsDir = UPLOADS_DIR;
-    if (fs.existsSync(uploadsDir)) {
-      archive.directory(uploadsDir, 'uploads');
-    }
-    await archive.finalize();
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', 'attachment; filename=milano-full-backup-' + new Date().toISOString().slice(0,10) + '.zip');
-    stream.pipe(res);
+    const data = {
+      version: 1,
+      created_at: new Date().toISOString(),
+      users: all('SELECT id, username, role, created_at FROM users'),
+      products: all('SELECT * FROM products'),
+      hero_settings: all('SELECT * FROM hero_settings'),
+      contact_info: all('SELECT * FROM contact_info'),
+      messages: all('SELECT * FROM messages'),
+      hero_slides: all('SELECT * FROM hero_slides')
+    };
+    const json = JSON.stringify(data, null, 2);
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename=milano-full-backup-' + new Date().toISOString().slice(0,10) + '.json');
+    res.send(json);
   } catch (err) {
-    res.status(500).json({ error: 'فشل تحميل النسخة الاحتياطية الكاملة: ' + err.message });
+    console.error('Backup error:', err);
+    res.status(500).json({ error: 'فشل تحميل النسخة الاحتياطية: ' + err.message });
   }
 });
 
@@ -687,24 +691,80 @@ app.post('/api/backup/restore', requireAuth, (req, res, next) => {
     if (err) return res.status(400).json({ error: err.message || 'خطأ في رفع الملف' });
     if (!req.file) return res.status(400).json({ error: 'لم يتم اختيار ملف' });
     try {
-      const fileBuffer = fs.readFileSync(req.file.path);
-      const initSqlJs = require('sql.js');
-      initSqlJs().then(SQL => {
-        try {
-          const testDb = new SQL.Database(fileBuffer);
-          testDb.run('SELECT COUNT(*) FROM sqlite_master');
-          testDb.close();
-          fs.copyFileSync(req.file.path, dbPath);
+      const ext = path.extname(req.file.originalname).toLowerCase();
+      const fileContent = fs.readFileSync(req.file.path, 'utf8');
+
+      if (ext === '.json') {
+        const data = JSON.parse(fileContent);
+        if (!data.version || !data.products) {
           fs.unlinkSync(req.file.path);
-          res.json({ success: true, message: 'تمت الاستعادة بنجاح. أعد تشغيل السيرفر.' });
-        } catch (e) {
-          fs.unlinkSync(req.file.path);
-          res.status(400).json({ error: 'ملف قاعدة البيانات غير صالح' });
+          return res.status(400).json({ error: 'ملف النسخة الاحتياطية غير صالح' });
         }
-      });
+        if (data.users) {
+          run('DELETE FROM users WHERE username != ?', ['admin']);
+          for (const u of data.users) {
+            if (u.username === 'admin') continue;
+            try {
+              run('INSERT INTO users (id, username, password, role, created_at) VALUES (?, ?, ?, ?, ?)',
+                [u.id, u.username, u.password, u.role || 'user', u.created_at]);
+            } catch (e) {}
+          }
+        }
+        run('DELETE FROM products');
+        for (const p of data.products) {
+          run('INSERT INTO products (id, name, description, price, images, video_url, category, is_available, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [p.id, p.name, p.description, p.price, p.images || '[]', p.video_url, p.category || 'other', p.is_available, p.created_at]);
+        }
+        if (data.hero_settings) {
+          run('DELETE FROM hero_settings');
+          for (const h of data.hero_settings) {
+            run('INSERT INTO hero_settings (id, title, subtitle, background_image, logo_url, is_active) VALUES (?, ?, ?, ?, ?, ?)',
+              [h.id, h.title, h.subtitle, h.background_image, h.logo_url, h.is_active]);
+          }
+        }
+        if (data.contact_info) {
+          run('DELETE FROM contact_info');
+          for (const c of data.contact_info) {
+            run('INSERT INTO contact_info (id, phone, email, address, map_embed_url, working_hours, facebook, instagram, tiktok, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              [c.id, c.phone, c.email, c.address, c.map_embed_url, c.working_hours, c.facebook, c.instagram, c.tiktok, c.whatsapp]);
+          }
+        }
+        if (data.messages) {
+          run('DELETE FROM messages');
+          for (const m of data.messages) {
+            run('INSERT INTO messages (id, user_id, name, email, phone, subject, message, reply, is_read, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              [m.id, m.user_id, m.name, m.email, m.phone, m.subject, m.message, m.reply, m.is_read, m.created_at]);
+          }
+        }
+        if (data.hero_slides) {
+          run('DELETE FROM hero_slides');
+          for (const s of data.hero_slides) {
+            run('INSERT INTO hero_slides (id, title, subtitle, image_url, btn_text, btn_link, sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+              [s.id, s.title, s.subtitle, s.image_url, s.btn_text, s.btn_link, s.sort_order, s.is_active]);
+          }
+        }
+        fs.unlinkSync(req.file.path);
+        res.json({ success: true, message: 'تمت الاستعادة بنجاح من ملف JSON. أعد تشغيل السيرفر.' });
+      } else {
+        const fileBuffer = fs.readFileSync(req.file.path);
+        const initSqlJs = require('sql.js');
+        initSqlJs().then(SQL => {
+          try {
+            const testDb = new SQL.Database(fileBuffer);
+            testDb.run('SELECT COUNT(*) FROM sqlite_master');
+            testDb.close();
+            fs.copyFileSync(req.file.path, dbPath);
+            fs.unlinkSync(req.file.path);
+            res.json({ success: true, message: 'تمت الاستعادة بنجاح. أعد تشغيل السيرفر.' });
+          } catch (e) {
+            fs.unlinkSync(req.file.path);
+            res.status(400).json({ error: 'ملف قاعدة البيانات غير صالح' });
+          }
+        });
+      }
     } catch (err) {
       if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-      res.status(500).json({ error: 'فشل استعادة قاعدة البيانات' });
+      res.status(500).json({ error: 'فشل استعادة قاعدة البيانات: ' + err.message });
     }
   });
 });
