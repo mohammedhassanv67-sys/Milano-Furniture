@@ -158,6 +158,11 @@ const upload = multer({
   limits: { fileSize: 200 * 1024 * 1024 }
 });
 
+const backupUpload = multer({
+  storage,
+  limits: { fileSize: 500 * 1024 * 1024 }
+});
+
 // ===== STATIC FILES (with restrictions) =====
 // Serve uploads from UPLOADS_DIR (persistent disk on Render, local on dev)
 app.use('/uploads', (req, res, next) => {
@@ -686,85 +691,114 @@ app.get('/api/backup/download-all', requireAuth, (req, res) => {
   }
 });
 
-app.post('/api/backup/restore', requireAuth, (req, res, next) => {
-  upload.single('database')(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message || 'خطأ في رفع الملف' });
+app.post('/api/backup/restore', requireAuth, (req, res) => {
+  backupUpload.single('database')(req, res, (err) => {
+    if (err) {
+      console.error('[RESTORE UPLOAD ERROR]', err.message);
+      return res.status(400).json({ error: 'خطأ في رفع الملف: ' + err.message });
+    }
     if (!req.file) return res.status(400).json({ error: 'لم يتم اختيار ملف' });
-    try {
-      const ext = path.extname(req.file.originalname).toLowerCase();
-      const fileContent = fs.readFileSync(req.file.path, 'utf8');
 
+    const filePath = req.file.path;
+    const ext = path.extname(req.file.originalname || req.file.filename).toLowerCase();
+
+    try {
       if (ext === '.json') {
+        const fileContent = fs.readFileSync(filePath, 'utf8');
         const data = JSON.parse(fileContent);
+
         if (!data.version || !data.products) {
-          fs.unlinkSync(req.file.path);
+          fs.unlinkSync(filePath);
           return res.status(400).json({ error: 'ملف النسخة الاحتياطية غير صالح' });
         }
-        if (data.users) {
+
+        if (data.users && Array.isArray(data.users)) {
           run('DELETE FROM users WHERE username != ?', ['admin']);
           for (const u of data.users) {
-            if (u.username === 'admin') continue;
+            if (!u.username || u.username === 'admin') continue;
             try {
-              run('INSERT INTO users (id, username, password, role, created_at) VALUES (?, ?, ?, ?, ?)',
-                [u.id, u.username, u.password, u.role || 'user', u.created_at]);
-            } catch (e) {}
+              run('INSERT OR IGNORE INTO users (username, password, role, created_at) VALUES (?, ?, ?, ?)',
+                [u.username, u.password, u.role || 'user', u.created_at || new Date().toISOString()]);
+            } catch (e) { console.error('[RESTORE USER]', e.message); }
           }
         }
-        run('DELETE FROM products');
-        for (const p of data.products) {
-          run('INSERT INTO products (id, name, description, price, images, video_url, category, is_available, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [p.id, p.name, p.description, p.price, p.images || '[]', p.video_url, p.category || 'other', p.is_available, p.created_at]);
+
+        if (data.products && Array.isArray(data.products)) {
+          run('DELETE FROM products');
+          for (const p of data.products) {
+            try {
+              run('INSERT INTO products (name, description, price, images, video_url, category, is_available, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                [p.name, p.description || '', p.price || 0, p.images || '[]', p.video_url || null, p.category || 'other', p.is_available !== undefined ? p.is_available : 1, p.created_at || new Date().toISOString()]);
+            } catch (e) { console.error('[RESTORE PRODUCT]', e.message); }
+          }
         }
-        if (data.hero_settings) {
+
+        if (data.hero_settings && Array.isArray(data.hero_settings)) {
           run('DELETE FROM hero_settings');
           for (const h of data.hero_settings) {
-            run('INSERT INTO hero_settings (id, title, subtitle, background_image, logo_url, is_active) VALUES (?, ?, ?, ?, ?, ?)',
-              [h.id, h.title, h.subtitle, h.background_image, h.logo_url, h.is_active]);
+            try {
+              run('INSERT INTO hero_settings (title, subtitle, background_image, logo_url, is_active) VALUES (?, ?, ?, ?, ?)',
+                [h.title || 'Milano Furniture', h.subtitle || '', h.background_image || null, h.logo_url || null, h.is_active !== undefined ? h.is_active : 1]);
+            } catch (e) { console.error('[RESTORE HERO]', e.message); }
           }
         }
-        if (data.contact_info) {
+
+        if (data.contact_info && Array.isArray(data.contact_info)) {
           run('DELETE FROM contact_info');
           for (const c of data.contact_info) {
-            run('INSERT INTO contact_info (id, phone, email, address, map_embed_url, working_hours, facebook, instagram, tiktok, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-              [c.id, c.phone, c.email, c.address, c.map_embed_url, c.working_hours, c.facebook, c.instagram, c.tiktok, c.whatsapp]);
+            try {
+              run('INSERT INTO contact_info (phone, email, address, map_embed_url, working_hours, facebook, instagram, tiktok, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [c.phone || '', c.email || '', c.address || '', c.map_embed_url || '', c.working_hours || '', c.facebook || null, c.instagram || null, c.tiktok || null, c.whatsapp || null]);
+            } catch (e) { console.error('[RESTORE CONTACT]', e.message); }
           }
         }
-        if (data.messages) {
+
+        if (data.messages && Array.isArray(data.messages)) {
           run('DELETE FROM messages');
           for (const m of data.messages) {
-            run('INSERT INTO messages (id, user_id, name, email, phone, subject, message, reply, is_read, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-              [m.id, m.user_id, m.name, m.email, m.phone, m.subject, m.message, m.reply, m.is_read, m.created_at]);
+            try {
+              run('INSERT INTO messages (name, email, phone, subject, message, reply, is_read, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                [m.name, m.email, m.phone || '', m.subject || '', m.message, m.reply || null, m.is_read || 0, m.created_at || new Date().toISOString()]);
+            } catch (e) { console.error('[RESTORE MSG]', e.message); }
           }
         }
-        if (data.hero_slides) {
+
+        if (data.hero_slides && Array.isArray(data.hero_slides)) {
           run('DELETE FROM hero_slides');
           for (const s of data.hero_slides) {
-            run('INSERT INTO hero_slides (id, title, subtitle, image_url, btn_text, btn_link, sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-              [s.id, s.title, s.subtitle, s.image_url, s.btn_text, s.btn_link, s.sort_order, s.is_active]);
+            try {
+              run('INSERT INTO hero_slides (title, subtitle, image_url, btn_text, btn_link, sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [s.title || '', s.subtitle || '', s.image_url || '', s.btn_text || '', s.btn_link || '#', s.sort_order || 0, s.is_active !== undefined ? s.is_active : 1]);
+            } catch (e) { console.error('[RESTORE SLIDE]', e.message); }
           }
         }
-        fs.unlinkSync(req.file.path);
-        res.json({ success: true, message: 'تمت الاستعادة بنجاح من ملف JSON. أعد تشغيل السيرفر.' });
+
+        fs.unlinkSync(filePath);
+        res.json({ success: true, message: 'تمت الاستعادة بنجاح من ملف JSON' });
       } else {
-        const fileBuffer = fs.readFileSync(req.file.path);
+        const fileBuffer = fs.readFileSync(filePath);
         const initSqlJs = require('sql.js');
         initSqlJs().then(SQL => {
           try {
             const testDb = new SQL.Database(fileBuffer);
             testDb.run('SELECT COUNT(*) FROM sqlite_master');
             testDb.close();
-            fs.copyFileSync(req.file.path, dbPath);
-            fs.unlinkSync(req.file.path);
-            res.json({ success: true, message: 'تمت الاستعادة بنجاح. أعد تشغيل السيرفر.' });
+            fs.copyFileSync(filePath, dbPath);
+            fs.unlinkSync(filePath);
+            res.json({ success: true, message: 'تمت الاستعادة بنجاح من ملف DB' });
           } catch (e) {
-            fs.unlinkSync(req.file.path);
+            try { fs.unlinkSync(filePath); } catch(x) {}
             res.status(400).json({ error: 'ملف قاعدة البيانات غير صالح' });
           }
+        }).catch(e => {
+          try { fs.unlinkSync(filePath); } catch(x) {}
+          res.status(500).json({ error: 'خطأ في تحميل sql.js' });
         });
       }
     } catch (err) {
-      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-      res.status(500).json({ error: 'فشل استعادة قاعدة البيانات: ' + err.message });
+      console.error('[RESTORE ERROR]', err.message);
+      try { fs.unlinkSync(filePath); } catch(x) {}
+      res.status(500).json({ error: 'فشل الاستعادة: ' + err.message });
     }
   });
 });
