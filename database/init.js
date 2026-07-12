@@ -1,21 +1,47 @@
-const { createClient } = require('@libsql/client');
 const bcrypt = require('bcryptjs');
+const fs = require('fs');
+const path = require('path');
 
 const TURSO_URL = process.env.TURSO_DATABASE_URL;
 const TURSO_TOKEN = process.env.TURSO_AUTH_TOKEN;
 
 let client = null;
+let sqlDb = null;
+let dbPath = null;
+let useTurso = false;
+
+function saveDb() {
+  if (useTurso || !sqlDb) return;
+  const dir = path.dirname(dbPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  const data = sqlDb.export();
+  const buffer = Buffer.from(data);
+  fs.writeFileSync(dbPath, buffer);
+}
 
 async function initDatabase() {
-  client = createClient({
-    url: TURSO_URL || 'file:./database/milano.db',
-    authToken: TURSO_TOKEN || undefined
-  });
+  if (TURSO_URL) {
+    const { createClient } = require('@libsql/client');
+    client = createClient({ url: TURSO_URL, authToken: TURSO_TOKEN || undefined });
+    useTurso = true;
+    await client.execute('SELECT 1');
+    console.log('Database connected: Turso');
+  } else {
+    const initSqlJs = require('sql.js');
+    const SQL = await initSqlJs();
+    dbPath = process.env.DB_PATH || path.join(__dirname, 'milano.db');
+    if (fs.existsSync(dbPath)) {
+      const fileBuffer = fs.readFileSync(dbPath);
+      sqlDb = new SQL.Database(fileBuffer);
+    } else {
+      sqlDb = new SQL.Database();
+    }
+    console.log('Database connected: Local (' + dbPath + ')');
+  }
 
-  await client.execute('SELECT 1');
-  console.log('Database connected: ' + (TURSO_URL ? 'Turso' : 'Local'));
-
-  await client.batch([
+  await batch([
     `CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
@@ -96,7 +122,8 @@ async function initDatabase() {
 
   const existingContact = await get('SELECT id FROM contact_info WHERE id = 1');
   if (!existingContact) {
-    await run('INSERT INTO contact_info (phone, email, address, working_hours) VALUES (?, ?, ?, ?)', ['+966 50 123 4567', 'info@milano-furniture.com', 'الرياض، المملكة العربية السعودية', 'السبت - الخميس: 9 صباحاً - 10 مساءً']);
+    await run('INSERT INTO contact_info (phone, email, address, working_hours) VALUES (?, ?, ?, ?)',
+      ['+966 50 123 4567', 'info@milano-furniture.com', 'الرياض، المملكة العربية السعودية', 'السبت - الخميس: 9 صباحاً - 10 مساءً']);
   }
 
   const existingSlides = await get('SELECT id FROM hero_slides LIMIT 1');
@@ -165,21 +192,60 @@ async function initDatabase() {
 }
 
 async function run(sql, params = []) {
-  await client.execute({ sql, args: params || [] });
+  if (useTurso) {
+    await client.execute({ sql, args: params || [] });
+  } else {
+    sqlDb.run(sql, params || []);
+    saveDb();
+  }
 }
 
 async function get(sql, params = []) {
-  const result = await client.execute({ sql, args: params || [] });
-  return result.rows[0] || undefined;
+  if (useTurso) {
+    const result = await client.execute({ sql, args: params || [] });
+    return result.rows[0] || undefined;
+  } else {
+    const stmt = sqlDb.prepare(sql);
+    stmt.bind(params || []);
+    if (stmt.step()) {
+      const row = stmt.getAsObject();
+      stmt.free();
+      return row;
+    }
+    stmt.free();
+    return undefined;
+  }
 }
 
 async function all(sql, params = []) {
-  const result = await client.execute({ sql, args: params || [] });
-  return result.rows;
+  if (useTurso) {
+    const result = await client.execute({ sql, args: params || [] });
+    return result.rows;
+  } else {
+    const stmt = sqlDb.prepare(sql);
+    stmt.bind(params || []);
+    const rows = [];
+    while (stmt.step()) {
+      rows.push(stmt.getAsObject());
+    }
+    stmt.free();
+    return rows;
+  }
 }
 
-function getClient() {
-  return client;
+async function batch(statements) {
+  if (useTurso) {
+    await client.batch(statements);
+  } else {
+    for (const sql of statements) {
+      sqlDb.run(sql);
+    }
+    saveDb();
+  }
 }
 
-module.exports = { initDatabase, run, get, all, getClient };
+function getDbPath() {
+  return dbPath;
+}
+
+module.exports = { initDatabase, run, get, all, getDbPath };

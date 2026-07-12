@@ -7,7 +7,7 @@ const multer = require('multer');
 const QRCode = require('qrcode');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const { initDatabase, run, get, all, getClient } = require('./database/init');
+const { initDatabase, run, get, all, getDbPath } = require('./database/init');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
