@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>حسابي - Milano Furniture</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    body { background: var(--light-gray); padding-top: 80px; }
+    .account-container { max-width: 800px; margin: 30px auto; padding: 0 20px; }
+    .account-header { background: var(--black); color: var(--white); padding: 40px; border-radius: 15px; text-align: center; margin-bottom: 30px; }
+    .account-header h1 { color: var(--gold); margin-bottom: 10px; }
+    .account-header p { color: #ccc; }
+    .account-card { background: var(--white); border-radius: 15px; padding: 30px; box-shadow: var(--shadow); margin-bottom: 20px; }
+    .account-card h2 { font-size: 1.5rem; margin-bottom: 20px; color: var(--black); }
+    .account-info { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .account-info-item { padding: 15px; background: var(--light-gray); border-radius: 10px; }
+    .account-info-item label { display: block; font-weight: 600; margin-bottom: 5px; color: var(--gray); font-size: 0.9rem; }
+    .account-info-item span { font-size: 1.1rem; color: var(--black); }
+    .account-actions { display: flex; gap: 15px; flex-wrap: wrap; }
+    .account-actions a, .account-actions button {
+      flex: 1; min-width: 200px; padding: 15px; border-radius: 10px; text-align: center;
+      font-family: 'Cairo', sans-serif; font-size: 1rem; font-weight: 600; cursor: pointer;
+      transition: var(--transition); border: none;
+    }
+    .btn-gold { background: var(--gold); color: var(--black); }
+    .btn-gold:hover { background: var(--gold-dark); }
+    .btn-outline { background: transparent; border: 2px solid var(--gold); color: var(--gold); }
+    .btn-outline:hover { background: var(--gold); color: var(--white); }
+    .btn-red { background: var(--danger); color: white; }
+    .btn-red:hover { opacity: 0.8; }
+    .nav-bar-user { display: flex; justify-content: space-between; align-items: center; }
+  </style>
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="container nav-bar-user">
+      <a href="/" class="nav-logo">
+        <img src="/images/logo/logo.png" alt="Milano" onerror="this.style.display='none'">
+        <h1>Milano</h1>
+      </a>
+      <ul class="nav-links">
+        <li><a href="/">الرئيسية</a></li>
+        <li><a href="/#gallery">المعرض</a></li>
+        <li><a href="/#contact">تواصل معنا</a></li>
+        <li><a href="/settings" class="nav-admin-btn"><i class="fas fa-cog"></i> الإعدادات</a></li>
+        <li id="authNav"><a href="/account" class="nav-admin-btn" id="userDisplay"></a></li>
+      </ul>
+      <button class="mobile-menu-btn"><i class="fas fa-bars"></i></button>
+    </div>
+  </nav>
+
+  <div class="account-container">
+    <div class="account-header">
+      <h1><i class="fas fa-user-circle"></i> مرحباً بك</h1>
+      <p id="welcomeName">حسابي</p>
+    </div>
+
+    <div class="account-card">
+      <h2><i class="fas fa-info-circle"></i> معلومات الحساب</h2>
+      <div class="account-info">
+        <div class="account-info-item">
+          <label>اسم المستخدم</label>
+          <span id="accountUsername">-</span>
+        </div>
+        <div class="account-info-item">
+          <label>الرتبة</label>
+          <span id="accountRole">-</span>
+        </div>
+        <div class="account-info-item">
+          <label>تاريخ الإنشاء</label>
+          <span id="accountDate">-</span>
+        </div>
+        <div class="account-info-item">
+          <label>المعرف</label>
+          <span id="accountId">-</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="account-card">
+      <h2><i class="fas fa-cog"></i> الإعدادات</h2>
+      <div class="account-actions">
+        <a href="/" class="btn-gold"><i class="fas fa-home"></i> الرئيسية</a>
+        <a href="/#gallery" class="btn-gold"><i class="fas fa-images"></i> المعرض</a>
+        <a href="/settings" class="btn-gold"><i class="fas fa-cog"></i> الإعدادات</a>
+        <a href="/settings" class="btn-outline"><i class="fas fa-key"></i> تغيير كلمة المرور</a>
+        <button class="btn-red" onclick="logout()"><i class="fas fa-sign-out-alt"></i> تسجيل الخروج</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', loadAccount);
+
+    async function loadAccount() {
+      try {
+        const res = await fetch('/api/auth/check');
+        const data = await res.json();
+        
+        if (!data.loggedIn) {
+          window.location.href = '/login';
+          return;
+        }
+        
+        const user = data.user;
+        document.getElementById('welcomeName').textContent = 'مرحباً، ' + user.username;
+        document.getElementById('accountUsername').textContent = user.username;
+        document.getElementById('accountRole').textContent = user.role === 'admin' ? 'مدير' : 'مستخدم';
+        document.getElementById('accountId').textContent = '#' + user.id;
+        document.getElementById('userDisplay').innerHTML = '<i class="fas fa-user"></i> ' + user.username;
+        
+        // Mobile menu
+        document.querySelector('.mobile-menu-btn').addEventListener('click', () => {
+          document.querySelector('.nav-links').classList.toggle('active');
+        });
+      } catch (error) {
+        window.location.href = '/login';
+      }
+    }
+
+    async function logout() {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/';
+    }
+  </script>
+</body>
+</html>

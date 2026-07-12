@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>تعديل منتج - Milano Furniture</title>
+  <link rel="stylesheet" href="/css/admin.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    .images-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; }
+    .image-item { position: relative; width: 120px; height: 120px; border-radius: 10px; overflow: hidden; border: 2px solid #eee; }
+    .image-item img { width: 100%; height: 100%; object-fit: cover; }
+    .image-item .remove-img {
+      position: absolute; top: 5px; left: 5px; width: 24px; height: 24px;
+      background: var(--danger); color: white; border: none; border-radius: 50%;
+      cursor: pointer; font-size: 0.7rem; display: flex; align-items: center; justify-content: center;
+    }
+    .image-item .main-badge {
+      position: absolute; bottom: 5px; right: 5px; background: var(--gold);
+      color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: 600;
+    }
+    .existing-images { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; }
+    .existing-images .image-item { border-color: var(--gold); }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <img src="/images/logo/logo.png" alt="Milano" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2240%22 fill=%22%23C5A572%22/><text x=%2250%22 y=%2265%22 font-size=%2240%22 text-anchor=%22middle%22 fill=%22white%22>M</text></svg>'">
+      <h2>Milano</h2>
+      <p>لوحة التحكم</p>
+    </div>
+    <nav class="sidebar-menu">
+      <a href="/admin"><i class="fas fa-home"></i><span>الرئيسية</span></a>
+      <a href="/admin/products" class="active"><i class="fas fa-box"></i><span>المنتجات</span></a>
+      <a href="/admin/products/add"><i class="fas fa-plus-circle"></i><span>إضافة منتج</span></a>
+      <div class="divider"></div>
+      <a href="/admin/hero"><i class="fas fa-images"></i><span>إدارة الهيرو</span></a>
+      <a href="/admin/contact"><i class="fas fa-phone"></i><span>معلومات التواصل</span></a>
+      <a href="/admin/messages"><i class="fas fa-envelope"></i><span>الرسائل</span></a>
+      <div class="divider"></div>
+      <a href="/admin/users"><i class="fas fa-users"></i><span>المستخدمين</span></a>
+      <div class="divider"></div>
+      <a href="/" target="_blank"><i class="fas fa-external-link-alt"></i><span>عرض الموقع</span></a>
+      <a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i><span>تسجيل الخروج</span></a>
+    </nav>
+  </aside>
+
+  <!-- Sidebar Overlay -->
+  <div class="sidebar-overlay"></div>
+
+  <main class="main-content">
+    <div class="top-bar">
+      <div class="top-bar-logo">
+        <button class="sidebar-toggle"><i class="fas fa-bars"></i></button>
+        <img src="/images/logo/logo.png" alt="Milano" onerror="this.style.display='none'">
+      </div>
+      <h1><i class="fas fa-edit"></i> تعديل المنتج</h1>
+      <a href="/admin/products" class="btn btn-primary"><i class="fas fa-arrow-right"></i> العودة</a>
+    </div>
+
+    <div id="alert" class="alert"></div>
+
+    <div class="form-container">
+      <form id="productForm">
+        <input type="hidden" id="productId">
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label>اسم المنتج *</label>
+            <input type="text" id="name" required>
+          </div>
+          <div class="form-group">
+            <label>السعر ($) *</label>
+            <input type="number" id="price" step="0.01" required>
+          </div>
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label>التصنيف</label>
+            <select id="category">
+              <option value="salon">صالونات</option>
+              <option value="bedroom">غرف نوم</option>
+              <option value="dining">طاولات طعام</option>
+              <option value="lshape">L Shape</option>
+              <option value="other">قسم آخر</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>الحالة</label>
+            <select id="is_available">
+              <option value="1">متاح</option>
+              <option value="0">غير متاح</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label>الوصف</label>
+          <textarea id="description"></textarea>
+        </div>
+
+        <!-- Existing Images -->
+        <div class="form-group">
+          <label>الصور الحالية</label>
+          <div class="existing-images" id="existingImages"></div>
+        </div>
+
+        <!-- Add More Images -->
+        <div class="form-group">
+          <label>إضافة صور جديدة</label>
+          <div class="image-upload" id="imagesUpload" style="padding:20px;">
+            <i class="fas fa-cloud-upload-alt"></i>
+            <p>اضغط لاختيار صور متعددة</p>
+            <input type="file" id="imagesFile" accept="image/*" multiple>
+          </div>
+          <div class="images-list" id="newImagesList"></div>
+        </div>
+
+        <div class="form-group">
+          <label>روابط صور إضافية</label>
+          <div id="imageUrlsContainer"></div>
+          <button type="button" class="btn btn-info btn-sm" onclick="addImageUrlField()" style="margin-top:10px;">
+            <i class="fas fa-plus"></i> إضافة رابط صورة
+          </button>
+        </div>
+
+        <!-- Video -->
+        <div class="form-group">
+          <label>فيديو المنتج</label>
+          <div id="currentVideo"></div>
+          <div class="image-upload" id="videoUpload" style="padding:20px;">
+            <i class="fas fa-video"></i>
+            <p>اضغط لاختيار فيديو جديد</p>
+            <input type="file" id="videoFile" accept="video/*">
+          </div>
+          <div style="margin-top:10px;">
+            <label>رابط الفيديو</label>
+            <input type="url" id="videoUrl" placeholder="YouTube / رابط مباشر">
+          </div>
+        </div>
+        
+        <button type="submit" class="btn btn-primary" style="width:100%; padding:14px;">
+          <i class="fas fa-save"></i> حفظ التعديلات
+        </button>
+      </form>
+    </div>
+  </main>
+
+  <script src="/js/admin.js"></script>
+  <script>
+    let existingImages = [];
+    let newSelectedFiles = [];
+    let selectedVideoFile = null;
+
+    document.addEventListener('DOMContentLoaded', loadProduct);
+
+    async function loadProduct() {
+      const pathParts = window.location.pathname.split('/');
+      const productId = pathParts[pathParts.length - 1];
+      
+      try {
+        const response = await fetch('/api/products/' + productId);
+        const product = await response.json();
+        
+        document.getElementById('productId').value = product.id;
+        document.getElementById('name').value = product.name;
+        document.getElementById('description').value = product.description || '';
+        document.getElementById('price').value = product.price;
+        document.getElementById('category').value = product.category;
+        document.getElementById('is_available').value = product.is_available;
+        document.getElementById('videoUrl').value = product.video_url || '';
+
+        // Parse existing images
+        try {
+          existingImages = JSON.parse(product.images || '[]');
+        } catch {
+          existingImages = product.image_url ? [product.image_url] : [];
+        }
+
+        renderExistingImages();
+
+        if (product.video_url) {
+          document.getElementById('currentVideo').innerHTML = `
+            <p style="margin-bottom:10px; font-weight:600;">الفيديو الحالي:</p>
+            <video src="${product.video_url}" controls style="max-width:300px; border-radius:10px;"></video>
+          `;
+        }
+      } catch (error) {
+        showAlert('حدث خطأ في تحميل المنتج', 'danger');
+      }
+    }
+
+    function renderExistingImages() {
+      const container = document.getElementById('existingImages');
+      container.innerHTML = existingImages.map((url, i) => `
+        <div class="image-item">
+          <img src="${url}" alt="img">
+          <button type="button" class="remove-img" onclick="removeExistingImage(${i})"><i class="fas fa-times"></i></button>
+          ${i === 0 ? '<span class="main-badge">رئيسية</span>' : ''}
+        </div>
+      `).join('');
+    }
+
+    function removeExistingImage(index) {
+      existingImages.splice(index, 1);
+      renderExistingImages();
+    }
+
+    document.getElementById('imagesUpload').addEventListener('click', () => {
+      document.getElementById('imagesFile').click();
+    });
+
+    document.getElementById('imagesFile').addEventListener('change', (e) => {
+      Array.from(e.target.files).forEach(file => {
+        newSelectedFiles.push(file);
+      });
+      renderNewImages();
+      e.target.value = '';
+    });
+
+    function renderNewImages() {
+      const container = document.getElementById('newImagesList');
+      container.innerHTML = newSelectedFiles.map((file, i) => {
+        const url = URL.createObjectURL(file);
+        return `<div class="image-item">
+          <img src="${url}" alt="new img">
+          <button type="button" class="remove-img" onclick="removeNewImage(${i})"><i class="fas fa-times"></i></button>
+        </div>`;
+      }).join('');
+    }
+
+    function removeNewImage(index) {
+      newSelectedFiles.splice(index, 1);
+      renderNewImages();
+    }
+
+    function addImageUrlField() {
+      const container = document.getElementById('imageUrlsContainer');
+      const div = document.createElement('div');
+      div.style.cssText = 'display:flex; gap:10px; margin-bottom:10px;';
+      div.innerHTML = `
+        <input type="url" class="imageUrlInput" placeholder="https://example.com/image.jpg" style="flex:1; padding:10px; border:2px solid #eee; border-radius:8px; font-family:'Cairo',sans-serif;">
+        <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
+      `;
+      container.appendChild(div);
+    }
+
+    document.getElementById('videoUpload').addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.getElementById('videoFile').click();
+    });
+
+    document.getElementById('videoFile').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        if (file.size > 200 * 1024 * 1024) {
+          alert('حجم الفيديو كبير جداً. الحد الأقصى 200 ميجابايت');
+          e.target.value = '';
+          return;
+        }
+        selectedVideoFile = file;
+        const url = URL.createObjectURL(file);
+        document.getElementById('videoPreview').innerHTML = `
+          <div style="display:flex; align-items:center; gap:10px; margin-top:10px;">
+            <video src="${url}" controls style="max-width:300px; border-radius:10px;"></video>
+            <button type="button" class="btn btn-danger btn-sm" onclick="removeVideo()"><i class="fas fa-times"></i> إزالة</button>
+          </div>
+          <p style="font-size:0.85rem; color:var(--gold); margin-top:5px;"><i class="fas fa-check-circle"></i> ${file.name} (${(file.size/1024/1024).toFixed(1)} MB)</p>
+        `;
+      }
+    });
+
+    function removeVideo() {
+      selectedVideoFile = null;
+      document.getElementById('videoFile').value = '';
+      document.getElementById('videoPreview').innerHTML = '';
+    }
+
+    async function uploadFile(file, isVideo = false) {
+      const formData = new FormData();
+      const endpoint = isVideo ? '/api/upload/video' : '/api/upload';
+      const fieldName = isVideo ? 'video' : 'image';
+      formData.append(fieldName, file);
+      const response = await fetch(endpoint, { method: 'POST', body: formData });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || 'فشل رفع الملف');
+      return data.url;
+    }
+
+    document.getElementById('productForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+
+      try {
+        // Upload new images
+        for (const file of newSelectedFiles) {
+          const url = await uploadFile(file);
+          if (url) existingImages.push(url);
+        }
+
+        // Add URL images
+        document.querySelectorAll('.imageUrlInput').forEach(input => {
+          if (input.value.trim()) existingImages.push(input.value.trim());
+        });
+
+        // Upload video
+        let videoUrl = document.getElementById('videoUrl').value;
+        if (selectedVideoFile) {
+          videoUrl = await uploadFile(selectedVideoFile, true);
+        }
+
+        const productData = {
+          name: document.getElementById('name').value,
+          description: document.getElementById('description').value,
+          price: parseFloat(document.getElementById('price').value),
+          images: existingImages,
+          video_url: videoUrl || null,
+          category: document.getElementById('category').value,
+          is_available: parseInt(document.getElementById('is_available').value)
+        };
+
+        const productId = document.getElementById('productId').value;
+        const response = await fetch('/api/products/' + productId, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(productData)
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          showAlert('تم حفظ التعديلات بنجاح!', 'success');
+          setTimeout(() => { window.location.href = '/admin/products'; }, 1500);
+        } else {
+          showAlert('حدث خطأ أثناء الحفظ', 'danger');
+        }
+      } catch (error) {
+        showAlert('حدث خطأ: ' + error.message, 'danger');
+      }
+
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<i class="fas fa-save"></i> حفظ التعديلات';
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>تسجيل الدخول - Milano Furniture</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    body {
+      background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .login-container {
+      background: var(--white);
+      border-radius: 20px;
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+      width: 90%;
+      max-width: 450px;
+      animation: fadeInUp 0.6s ease;
+    }
+    
+    .login-header {
+      background: var(--black);
+      padding: 40px 30px;
+      text-align: center;
+    }
+    
+    .login-logo {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 15px;
+      background: rgba(197, 165, 114, 0.2);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid var(--gold);
+    }
+    
+    .login-logo img {
+      width: 50px;
+      height: 50px;
+      object-fit: contain;
+    }
+    
+    .login-header h1 {
+      color: var(--gold);
+      font-size: 1.8rem;
+      margin-bottom: 5px;
+    }
+    
+    .login-header p {
+      color: #ccc;
+      font-size: 0.95rem;
+    }
+    
+    .login-form {
+      padding: 40px 30px;
+    }
+    
+    .form-group {
+      margin-bottom: 25px;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: var(--black);
+    }
+    
+    .form-group .input-wrapper {
+      position: relative;
+    }
+    
+    .form-group .input-wrapper i {
+      position: absolute;
+      left: 15px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--gray);
+    }
+    
+    .form-group input {
+      width: 100%;
+      padding: 12px 15px 12px 45px;
+      border: 2px solid #eee;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-family: 'Cairo', sans-serif;
+      transition: var(--transition);
+    }
+    
+    .form-group input:focus {
+      outline: none;
+      border-color: var(--gold);
+    }
+    
+    .login-btn {
+      width: 100%;
+      padding: 14px;
+      background: var(--gold);
+      color: var(--black);
+      border: none;
+      border-radius: 10px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      font-family: 'Cairo', sans-serif;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    
+    .login-btn:hover {
+      background: var(--gold-dark);
+      transform: translateY(-2px);
+    }
+    
+    .login-btn:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+    
+    .error-message {
+      background: #fee;
+      color: #c00;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: none;
+      text-align: center;
+    }
+    
+    .back-link {
+      text-align: center;
+      margin-top: 20px;
+    }
+    
+    .back-link a {
+      color: var(--gray);
+      transition: var(--transition);
+    }
+    
+    .back-link a:hover {
+      color: var(--gold);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="login-container">
+    <div class="login-header">
+      <div class="login-logo">
+        <img src="/images/logo/logo.png" alt="Milano Logo" onerror="this.innerHTML='<i class=\fas fa-couch\ style=\font-size:1.8rem;color:#C5A572\>'">
+      </div>
+      <h1>Milano</h1>
+      <p>لوحة التحكم - تسجيل الدخول</p>
+    </div>
+    
+    <form class="login-form" id="loginForm">
+      <div class="error-message" id="errorMessage"></div>
+      
+      <div class="form-group">
+        <label>اسم المستخدم</label>
+        <div class="input-wrapper">
+          <i class="fas fa-user"></i>
+          <input type="text" id="username" placeholder="أدخل اسم المستخدم" required>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label>كلمة المرور</label>
+        <div class="input-wrapper">
+          <i class="fas fa-lock"></i>
+          <input type="password" id="password" placeholder="أدخل كلمة المرور" required>
+        </div>
+      </div>
+      
+      <button type="submit" class="login-btn" id="loginBtn">
+        <i class="fas fa-sign-in-alt"></i> تسجيل الدخول
+      </button>
+      
+      <div class="back-link">
+        <p>ليس لديك حساب؟ <a href="/register">إنشاء حساب جديد</a></p>
+        <p style="margin-top:10px;"><a href="/"><i class="fas fa-arrow-right"></i> العودة للموقع</a></p>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      const loginBtn = document.getElementById('loginBtn');
+      const errorMessage = document.getElementById('errorMessage');
+      
+      loginBtn.disabled = true;
+      loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحقق...';
+      errorMessage.style.display = 'none';
+      
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          if (data.user.role === 'admin') {
+            window.location.href = '/admin';
+          } else {
+            window.location.href = '/account';
+          }
+        } else {
+          errorMessage.textContent = data.error || 'خطأ في تسجيل الدخول';
+          errorMessage.style.display = 'block';
+        }
+      } catch (error) {
+        errorMessage.textContent = 'حدث خطأ في الاتصال بالخادم';
+        errorMessage.style.display = 'block';
+      }
+      
+      loginBtn.disabled = false;
+      loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> تسجيل الدخول';
+    });
+  </script>
+</body>
+</html>

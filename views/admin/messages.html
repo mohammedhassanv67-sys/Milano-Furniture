@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>الرسائل - Milano Furniture</title>
+  <link rel="stylesheet" href="/css/admin.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <img src="/images/logo/logo.png" alt="Milano" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2240%22 fill=%22%23C5A572%22/><text x=%2250%22 y=%2265%22 font-size=%2240%22 text-anchor=%22middle%22 fill=%22white%22>M</text></svg>'">
+      <h2>Milano</h2>
+      <p>لوحة التحكم</p>
+    </div>
+    <nav class="sidebar-menu">
+      <a href="/admin"><i class="fas fa-home"></i><span>الرئيسية</span></a>
+      <a href="/admin/products"><i class="fas fa-box"></i><span>المنتجات</span></a>
+      <a href="/admin/products/add"><i class="fas fa-plus-circle"></i><span>إضافة منتج</span></a>
+      <div class="divider"></div>
+      <a href="/admin/hero"><i class="fas fa-images"></i><span>إدارة الهيرو</span></a>
+      <a href="/admin/contact"><i class="fas fa-phone"></i><span>معلومات التواصل</span></a>
+      <a href="/admin/messages" class="active"><i class="fas fa-envelope"></i><span>الرسائل</span></a>
+      <div class="divider"></div>
+      <a href="/admin/users"><i class="fas fa-users"></i><span>المستخدمين</span></a>
+      <div class="divider"></div>
+      <a href="/" target="_blank"><i class="fas fa-external-link-alt"></i><span>عرض الموقع</span></a>
+      <a href="#" id="logoutBtn"><i class="fas fa-sign-out-alt"></i><span>تسجيل الخروج</span></a>
+    </nav>
+  </aside>
+
+  <!-- Sidebar Overlay -->
+  <div class="sidebar-overlay"></div>
+
+  <main class="main-content">
+    <div class="top-bar">
+      <div class="top-bar-logo">
+        <button class="sidebar-toggle"><i class="fas fa-bars"></i></button>
+        <img src="/images/logo/logo.png" alt="Milano" onerror="this.style.display='none'">
+      </div>
+      <h1><i class="fas fa-envelope"></i> الرسائل</h1>
+      <div class="top-bar-actions">
+        <span id="unreadCount" style="background:var(--danger); color:white; padding:5px 15px; border-radius:20px; font-weight:600;"></span>
+      </div>
+    </div>
+
+    <div id="alert" class="alert"></div>
+
+    <div class="table-container">
+      <div class="table-header">
+        <h2>جميع الرسائل (<span id="msgCount">0</span>)</h2>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>الحالة</th>
+            <th>الاسم</th>
+            <th>الإيميل</th>
+            <th>الموضوع</th>
+            <th>التاريخ</th>
+            <th>الإجراءات</th>
+          </tr>
+        </thead>
+        <tbody id="messagesTable">
+          <tr><td colspan="6" style="text-align:center; padding:40px;"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- Message Detail Modal -->
+  <div class="modal" id="messageModal">
+    <div class="modal-content" style="max-width:700px;">
+      <h3><i class="fas fa-envelope-open"></i> تفاصيل الرسالة</h3>
+      <div id="messageDetail" style="text-align:right; margin:20px 0;"></div>
+      
+      <div id="replySection" style="margin-top:20px; border-top:1px solid #eee; padding-top:20px;">
+        <h4><i class="fas fa-reply"></i> الرد على الرسالة</h4>
+        <div class="form-group" style="margin-top:15px;">
+          <textarea id="replyText" rows="4" placeholder="اكتب ردك هنا..." style="width:100%; padding:12px; border:2px solid #eee; border-radius:10px; font-family:'Cairo',sans-serif; font-size:1rem;"></textarea>
+        </div>
+        <button class="btn btn-primary" onclick="sendReply()"><i class="fas fa-paper-plane"></i> إرسال الرد</button>
+      </div>
+      
+      <div style="margin-top:15px; text-align:center;">
+        <button class="modal-close" onclick="closeMessageModal()" style="background:var(--gray); color:white; border:none; padding:10px 25px; border-radius:8px; cursor:pointer;">إغلاق</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/admin.js"></script>
+  <script>
+    let currentMessageId = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadMessages();
+      setInterval(loadUnreadCount, 30000);
+      loadUnreadCount();
+    });
+
+    async function loadMessages() {
+      try {
+        const response = await fetch('/api/messages');
+        const messages = await response.json();
+        
+        document.getElementById('msgCount').textContent = messages.length;
+        const tbody = document.getElementById('messagesTable');
+        
+        if (messages.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:60px;"><i class="fas fa-envelope" style="font-size:3rem; color:#C5A572; display:block; margin-bottom:15px;"></i><h3>لا توجد رسائل بعد</h3></td></tr>';
+          return;
+        }
+        
+        tbody.innerHTML = messages.map(msg => `
+          <tr style="${!msg.is_read ? 'background:#fff8e1;' : ''}">
+            <td>${!msg.is_read ? '<span class="status-badge unavailable">جديدة</span>' : '<span class="status-badge available">مقروءة</span>'}</td>
+            <td><strong>${msg.name}</strong></td>
+            <td>${msg.email}</td>
+            <td>${msg.subject || 'بدون موضوع'}</td>
+            <td>${new Date(msg.created_at).toLocaleDateString('ar-SA')}</td>
+            <td>
+              <div class="btn-group">
+                <button class="btn btn-info btn-sm" onclick="viewMessage(${msg.id})" title="عرض"><i class="fas fa-eye"></i></button>
+                <button class="btn btn-danger btn-sm" onclick="deleteMessage(${msg.id})" title="حذف"><i class="fas fa-trash"></i></button>
+              </div>
+            </td>
+          </tr>
+        `).join('');
+      } catch (error) {
+        console.error('Error:', error);
+      }
+    }
+
+    async function loadUnreadCount() {
+      try {
+        const res = await fetch('/api/messages/unread');
+        const data = await res.json();
+        document.getElementById('unreadCount').textContent = data.count > 0 ? `${data.count} رسائل جديدة` : '';
+      } catch (error) {}
+    }
+
+    async function viewMessage(id) {
+      try {
+        const response = await fetch('/api/messages');
+        const messages = await response.json();
+        const msg = messages.find(m => m.id === id);
+        if (!msg) return;
+        
+        currentMessageId = id;
+        
+        document.getElementById('messageDetail').innerHTML = `
+          <div style="background:#f5f5f5; padding:15px; border-radius:10px; margin-bottom:15px;">
+            <p><strong>الاسم:</strong> ${msg.name}</p>
+            <p><strong>الإيميل:</strong> ${msg.email}</p>
+            <p><strong>الهاتف:</strong> ${msg.phone || 'غير محدد'}</p>
+            <p><strong>الموضوع:</strong> ${msg.subject || 'بدون موضوع'}</p>
+            <p><strong>التاريخ:</strong> ${new Date(msg.created_at).toLocaleString('ar-SA')}</p>
+          </div>
+          <div style="padding:15px; border:1px solid #eee; border-radius:10px;">
+            <p><strong>الرسالة:</strong></p>
+            <p style="margin-top:10px; line-height:1.8;">${msg.message}</p>
+          </div>
+          ${msg.reply ? `
+            <div style="background:#e8f5e9; padding:15px; border-radius:10px; margin-top:15px;">
+              <p><strong><i class="fas fa-reply"></i> ردك:</strong></p>
+              <p style="margin-top:10px; line-height:1.8;">${msg.reply}</p>
+            </div>
+          ` : ''}
+        `;
+        
+        document.getElementById('replyText').value = msg.reply || '';
+        
+        if (!msg.is_read) {
+          await fetch('/api/messages/' + id + '/read', { method: 'PUT' });
+          loadMessages();
+          loadUnreadCount();
+        }
+        
+        document.getElementById('messageModal').classList.add('active');
+      } catch (error) {
+        showAlert('حدث خطأ', 'danger');
+      }
+    }
+
+    async function sendReply() {
+      if (!currentMessageId) return;
+      const reply = document.getElementById('replyText').value;
+      if (!reply.trim()) { showAlert('اكتب رد أولاً', 'danger'); return; }
+      
+      try {
+        await fetch('/api/messages/' + currentMessageId + '/reply', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reply })
+        });
+        showAlert('تم إرسال الرد بنجاح', 'success');
+        closeMessageModal();
+        loadMessages();
+      } catch (error) {
+        showAlert('حدث خطأ', 'danger');
+      }
+    }
+
+    async function deleteMessage(id) {
+      if (!confirm('هل أنت متأكد من حذف هذه الرسالة؟')) return;
+      try {
+        await fetch('/api/messages/' + id, { method: 'DELETE' });
+        showAlert('تم الحذف بنجاح', 'success');
+        loadMessages();
+        loadUnreadCount();
+      } catch (error) {
+        showAlert('حدث خطأ', 'danger');
+      }
+    }
+
+    function closeMessageModal() {
+      document.getElementById('messageModal').classList.remove('active');
+      currentMessageId = null;
+    }
+
+    document.getElementById('messageModal').addEventListener('click', (e) => {
+      if (e.target.id === 'messageModal') closeMessageModal();
+    });
+  </script>
+</body>
+</html>

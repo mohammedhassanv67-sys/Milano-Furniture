@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>إنشاء حساب - Milano Furniture</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    body { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .login-container { background: var(--white); border-radius: 20px; box-shadow: var(--shadow-lg); overflow: hidden; width: 90%; max-width: 450px; animation: fadeInUp 0.6s ease; }
+    .login-header { background: var(--black); padding: 40px 30px; text-align: center; }
+    .login-logo { width: 80px; height: 80px; margin: 0 auto 15px; background: rgba(197,165,114,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid var(--gold); }
+    .login-logo img { width: 50px; height: 50px; object-fit: contain; }
+    .login-header h1 { color: var(--gold); font-size: 1.8rem; margin-bottom: 5px; }
+    .login-header p { color: #ccc; font-size: 0.95rem; }
+    .login-form { padding: 40px 30px; }
+    .form-group { margin-bottom: 20px; }
+    .form-group label { display: block; margin-bottom: 8px; font-weight: 600; color: var(--black); }
+    .form-group .input-wrapper { position: relative; }
+    .form-group .input-wrapper i { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--gray); }
+    .form-group input { width: 100%; padding: 12px 15px 12px 45px; border: 2px solid #eee; border-radius: 10px; font-size: 1rem; font-family: 'Cairo', sans-serif; transition: var(--transition); }
+    .form-group input:focus { outline: none; border-color: var(--gold); }
+    .form-group .hint { font-size: 0.8rem; color: var(--gray); margin-top: 5px; }
+    .form-group .hint.error { color: var(--danger); }
+    .form-group .hint.success { color: var(--success); }
+    .login-btn { width: 100%; padding: 14px; background: var(--gold); color: var(--black); border: none; border-radius: 10px; font-size: 1.1rem; font-weight: 600; font-family: 'Cairo', sans-serif; cursor: pointer; transition: var(--transition); }
+    .login-btn:hover { background: var(--gold-dark); transform: translateY(-2px); }
+    .login-btn:disabled { opacity: 0.7; cursor: not-allowed; }
+    .error-message { background: #fee; color: #c00; padding: 12px; border-radius: 8px; margin-bottom: 20px; display: none; text-align: center; }
+    .links { text-align: center; margin-top: 20px; }
+    .links a { color: var(--gold); font-weight: 600; }
+    .links a:hover { color: var(--gold-dark); }
+    .password-strength { height: 5px; border-radius: 3px; margin-top: 8px; background: #eee; overflow: hidden; }
+    .password-strength-bar { height: 100%; width: 0; transition: var(--transition); border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="login-header">
+      <div class="login-logo">
+        <img src="/images/logo/logo.png" alt="Milano Logo" onerror="this.innerHTML='<i class=\fas fa-couch\ style=\font-size:1.8rem;color:#C5A572\>'">
+      </div>
+      <h1>Milano</h1>
+      <p>إنشاء حساب جديد</p>
+    </div>
+    
+    <form class="login-form" id="registerForm">
+      <div class="error-message" id="errorMessage"></div>
+      
+      <div class="form-group">
+        <label>اسم المستخدم</label>
+        <div class="input-wrapper">
+          <i class="fas fa-user"></i>
+          <input type="text" id="username" placeholder="3 أحرف على الأقل" required minlength="3">
+        </div>
+        <div class="hint" id="usernameHint"></div>
+      </div>
+      
+      <div class="form-group">
+        <label>كلمة المرور</label>
+        <div class="input-wrapper">
+          <i class="fas fa-lock"></i>
+          <input type="password" id="password" placeholder="8 أحرف على الأقل (حروف + أرقام)" required minlength="8">
+        </div>
+        <div class="password-strength"><div class="password-strength-bar" id="strengthBar"></div></div>
+        <div class="hint" id="passwordHint"></div>
+      </div>
+      
+      <div class="form-group">
+        <label>تأكيد كلمة المرور</label>
+        <div class="input-wrapper">
+          <i class="fas fa-lock"></i>
+          <input type="password" id="confirmPassword" placeholder="أعد إدخال كلمة المرور" required>
+        </div>
+        <div class="hint" id="confirmHint"></div>
+      </div>
+      
+      <button type="submit" class="login-btn" id="registerBtn">
+        <i class="fas fa-user-plus"></i> إنشاء الحساب
+      </button>
+      
+      <div class="links">
+        <p>لديك حساب بالفعل؟ <a href="/login">تسجيل الدخول</a></p>
+        <p style="margin-top:10px;"><a href="/" style="color:#666;"><i class="fas fa-arrow-right"></i> العودة للموقع</a></p>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    let usernameAvailable = false;
+    let debounceTimer;
+
+    document.getElementById('username').addEventListener('input', (e) => {
+      const username = e.target.value;
+      const hint = document.getElementById('usernameHint');
+      
+      if (username.length < 3) {
+        hint.textContent = '3 أحرف على الأقل';
+        hint.className = 'hint error';
+        usernameAvailable = false;
+        return;
+      }
+      
+      if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+        hint.textContent = 'أحرف وأرقام فقط';
+        hint.className = 'hint error';
+        usernameAvailable = false;
+        return;
+      }
+      
+      clearTimeout(debounceTimer);
+      hint.textContent = 'جاري التحقق...';
+      hint.className = 'hint';
+      
+      debounceTimer = setTimeout(async () => {
+        try {
+          const res = await fetch('/api/auth/check-username/' + username);
+          const data = await res.json();
+          if (data.available) {
+            hint.textContent = 'اسم المستخدم متاح';
+            hint.className = 'hint success';
+            usernameAvailable = true;
+          } else {
+            hint.textContent = 'اسم المستخدم مستخدم بالفعل';
+            hint.className = 'hint error';
+            usernameAvailable = false;
+          }
+        } catch (error) {
+          hint.textContent = 'خطأ في التحقق';
+          hint.className = 'hint error';
+        }
+      }, 500);
+    });
+
+    document.getElementById('password').addEventListener('input', (e) => {
+      const password = e.target.value;
+      const bar = document.getElementById('strengthBar');
+      const hint = document.getElementById('passwordHint');
+      let strength = 0;
+      
+      if (password.length >= 8) strength++;
+      if (/[a-zA-Z]/.test(password)) strength++;
+      if (/[0-9]/.test(password)) strength++;
+      if (/[^a-zA-Z0-9]/.test(password)) strength++;
+      
+      const colors = ['#dc3545', '#fd7e14', '#ffc107', '#28a745'];
+      const widths = ['25%', '50%', '75%', '100%'];
+      
+      bar.style.width = password.length > 0 ? widths[Math.min(strength, 3)] : '0';
+      bar.style.background = password.length > 0 ? colors[Math.min(strength, 3)] : '#eee';
+      
+      if (password.length > 0 && password.length < 8) {
+        hint.textContent = '8 أحرف على الأقل';
+        hint.className = 'hint error';
+      } else if (password.length >= 8 && !/[a-zA-Z]/.test(password)) {
+        hint.textContent = 'أضف أحرف';
+        hint.className = 'hint error';
+      } else if (password.length >= 8 && !/[0-9]/.test(password)) {
+        hint.textContent = 'أضف أرقام';
+        hint.className = 'hint error';
+      } else if (password.length >= 8) {
+        hint.textContent = 'كلمة مرور قوية';
+        hint.className = 'hint success';
+      } else {
+        hint.textContent = '';
+        hint.className = 'hint';
+      }
+    });
+
+    document.getElementById('confirmPassword').addEventListener('input', (e) => {
+      const hint = document.getElementById('confirmHint');
+      const password = document.getElementById('password').value;
+      if (e.target.value === password) {
+        hint.textContent = 'متطابقتان';
+        hint.className = 'hint success';
+      } else {
+        hint.textContent = 'غير متطابقتين';
+        hint.className = 'hint error';
+      }
+    });
+
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const errorMessage = document.getElementById('errorMessage');
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      const confirmPassword = document.getElementById('confirmPassword').value;
+      
+      if (!usernameAvailable) {
+        errorMessage.textContent = 'اسم المستخدم غير متاح';
+        errorMessage.style.display = 'block';
+        return;
+      }
+      
+      if (password !== confirmPassword) {
+        errorMessage.textContent = 'كلمتا المرور غير متطابقتين';
+        errorMessage.style.display = 'block';
+        return;
+      }
+      
+      if (password.length < 8) {
+        errorMessage.textContent = 'كلمة المرور يجب أن تكون 8 أحرف على الأقل';
+        errorMessage.style.display = 'block';
+        return;
+      }
+      
+      if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+        errorMessage.textContent = 'كلمة المرور يجب أن تحتوي على أحرف وأرقام';
+        errorMessage.style.display = 'block';
+        return;
+      }
+      
+      const registerBtn = document.getElementById('registerBtn');
+      registerBtn.disabled = true;
+      registerBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري إنشاء الحساب...';
+      errorMessage.style.display = 'none';
+      
+      try {
+        const response = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          window.location.href = '/login?registered=true';
+        } else {
+          errorMessage.textContent = data.error;
+          errorMessage.style.display = 'block';
+        }
+      } catch (error) {
+        errorMessage.textContent = 'حدث خطأ في الاتصال';
+        errorMessage.style.display = 'block';
+      }
+      
+      registerBtn.disabled = false;
+      registerBtn.innerHTML = '<i class="fas fa-user-plus"></i> إنشاء الحساب';
+    });
+  </script>
+</body>
+</html>
