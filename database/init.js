@@ -122,6 +122,11 @@ async function initDatabase() {
     is_active INTEGER DEFAULT 1
   )`);
 
+  run(`CREATE TABLE IF NOT EXISTS site_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT
+  )`);
+
   const existingAdmin = get('SELECT id FROM users WHERE username = ?', ['admin']);
   if (!existingAdmin) {
     const hashedPassword = bcrypt.hashSync('admin123', 10);
@@ -144,6 +149,33 @@ async function initDatabase() {
       ['Milano Furniture', 'أثاث فاخر يعكس ذوقك الرفيع', '/images/hero/hero1.jpg', 'اكتشف المعرض', '#gallery', 1]);
     run('INSERT INTO hero_slides (title, subtitle, image_url, btn_text, btn_link, sort_order) VALUES (?, ?, ?, ?, ?, ?)', 
       ['تشكيلة فريدة', 'أجواء فخمة لمنزلك', '/images/hero/hero2.jpg', 'تصفح المنتجات', '#gallery', 2]);
+  }
+
+  const defaultSettings = {
+    'counter_products_value': '150',
+    'counter_products_label': 'منتج متوفر',
+    'counter_customers_value': '500',
+    'counter_customers_label': 'عميل سعيد',
+    'counter_years_value': '10',
+    'counter_years_label': 'سنوات خبرة',
+    'counter_cities_value': '25',
+    'counter_cities_label': 'مدينة',
+    'hero_tag_1_text': 'جودة عالية',
+    'hero_tag_1_icon': 'fa-gem',
+    'hero_tag_2_text': 'توصيل مجاني',
+    'hero_tag_2_icon': 'fa-truck',
+    'hero_tag_3_text': 'ضمان سنة',
+    'hero_tag_3_icon': 'fa-shield-alt',
+    'typing_phrase_1': 'أثاث فاخر يعكس ذوقك الرفيع',
+    'typing_phrase_2': 'تشكيلة فريدة من أرقى الماركات',
+    'typing_phrase_3': 'تصميم عصري بلمسة كلاسيكية',
+    'typing_phrase_4': 'جودة لا تُضاهى بأفضل الأسعار'
+  };
+  for (const [key, value] of Object.entries(defaultSettings)) {
+    const existing = get('SELECT key FROM site_settings WHERE key = ?', [key]);
+    if (!existing) {
+      run('INSERT INTO site_settings (key, value) VALUES (?, ?)', [key, value]);
+    }
   }
 
   // Migration: ensure images/video_url columns exist for older DBs

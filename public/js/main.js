@@ -1,11 +1,14 @@
 document.addEventListener('DOMContentLoaded', () => {
   initNavbar();
-  initHeroSlider();
   initHeroParticles();
-  initTypingEffect();
+  loadSiteSettings().then(() => {
+    loadHeroSlides();
+    initHeroSlider();
+    initTypingEffect();
+    loadCounters();
+  });
   loadProducts();
   loadContact();
-  loadCounters();
   checkAuth();
   initBackToTop();
   initSearch();
@@ -32,9 +35,72 @@ function initNavbar() {
   });
 }
 
-// ===== HERO SLIDER =====
+// ===== SITE SETTINGS =====
+let siteSettings = {};
+
+async function loadSiteSettings() {
+  try {
+    const res = await fetch('/api/settings');
+    siteSettings = await res.json();
+    applyHeroSettings();
+  } catch (e) {
+    console.error('Error loading settings:', e);
+  }
+}
+
+function applyHeroSettings() {
+  const tagsContainer = document.getElementById('heroTags');
+  if (tagsContainer) {
+    const tags = [];
+    for (let i = 1; i <= 3; i++) {
+      const text = siteSettings['hero_tag_' + i + '_text'];
+      const icon = siteSettings['hero_tag_' + i + '_icon'] || 'fa-star';
+      if (text) tags.push(`<span class="hero-tag"><i class="fas ${icon}"></i> ${text}</span>`);
+    }
+    if (tags.length > 0) tagsContainer.innerHTML = tags.join('');
+  }
+
+  const btnLabel = document.getElementById('heroBtnLabel');
+  const btnLink = document.getElementById('heroMainBtn');
+  if (btnLabel && siteSettings.hero_btn_text) btnLabel.textContent = siteSettings.hero_btn_text;
+  if (btnLink && siteSettings.hero_btn_link) btnLink.href = siteSettings.hero_btn_link;
+}
+
+// ===== HERO SLIDES =====
 let currentSlide = 0;
 let slideInterval;
+
+async function loadHeroSlides() {
+  try {
+    const res = await fetch('/api/slides');
+    const slidesData = await res.json();
+    if (slidesData.length === 0) return;
+
+    const slider = document.getElementById('heroSlider');
+    const dots = document.getElementById('heroDots');
+    if (!slider || !dots) return;
+
+    slider.innerHTML = slidesData.map((s, i) =>
+      `<div class="hero-slide${i === 0 ? ' active' : ''}" style="background-image: url('${s.image_url || '/images/hero/hero1.jpg'}');"></div>`
+    ).join('');
+
+    dots.innerHTML = slidesData.map((s, i) =>
+      `<div class="hero-dot${i === 0 ? ' active' : ''}" data-slide="${i}"></div>`
+    ).join('');
+
+    if (slidesData.length > 0) {
+      const first = slidesData[0];
+      const titleEl = document.querySelector('.hero-title');
+      if (titleEl && first.title) titleEl.innerHTML = `<span>${first.title}</span>`;
+      const subtitleEl = document.querySelector('.hero-subtitle .typing-text');
+      if (subtitleEl && first.subtitle) {
+        subtitleEl.textContent = first.subtitle;
+      }
+    }
+  } catch (e) {
+    console.error('Error loading slides:', e);
+  }
+}
 
 function initHeroSlider() {
   const slides = document.querySelectorAll('.hero-slide');
@@ -50,11 +116,6 @@ function initHeroSlider() {
 
   function nextSlide() {
     currentSlide = (currentSlide + 1) % slides.length;
-    showSlide(currentSlide);
-  }
-
-  function prevSlide() {
-    currentSlide = (currentSlide - 1 + slides.length) % slides.length;
     showSlide(currentSlide);
   }
 
@@ -97,12 +158,14 @@ function initTypingEffect() {
   const el = document.getElementById('typingText');
   if (!el) return;
 
-  const phrases = [
-    'أثاث فاخر يعكس ذوقك الرفيع',
-    'تشكيلة فريدة من أرقى الماركات',
-    'تصميم عصري بلمسة كلاسيكية',
-    'جودة لا تُضاهى بأفضل الأسعار'
-  ];
+  const phrases = [];
+  for (let i = 1; i <= 10; i++) {
+    const val = siteSettings['typing_phrase_' + i];
+    if (val) phrases.push(val);
+  }
+  if (phrases.length === 0) {
+    phrases.push('أثاث فاخر يعكس ذوقك الرفيع', 'تشكيلة فريدة من أرقى الماركات', 'تصميم عصري بلمسة كلاسيكية', 'جودة لا تُضاهى بأفضل الأسعار');
+  }
 
   let phraseIndex = 0;
   let charIndex = 0;
@@ -306,16 +369,35 @@ function initSearch() {
 
 // ===== COUNTERS =====
 function loadCounters() {
+  const counterGrid = document.getElementById('counterGrid');
+  if (!counterGrid) return;
+
+  const counters = [
+    { key: 'counter_products', fallback: 150 },
+    { key: 'counter_customers', fallback: 500 },
+    { key: 'counter_years', fallback: 10 },
+    { key: 'counter_cities', fallback: 25 }
+  ];
+
+  counterGrid.innerHTML = counters.map(c => {
+    const val = parseInt(siteSettings[c.key + '_value']) || c.fallback;
+    const label = siteSettings[c.key + '_label'] || '';
+    return `<div class="counter-item">
+      <div class="counter-number" data-target="${val}">0</div>
+      <div class="counter-label">${label}</div>
+    </div>`;
+  }).join('');
+
   const counterSection = document.querySelector('.counter-section');
   if (!counterSection) return;
 
-  const counters = counterSection.querySelectorAll('.counter-number');
-  if (counters.length === 0) return;
+  const counterEls = counterSection.querySelectorAll('.counter-number');
+  if (counterEls.length === 0) return;
 
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
-        counters.forEach(counter => {
+        counterEls.forEach(counter => {
           const target = parseInt(counter.dataset.target);
           const duration = 2000;
           const increment = target / (duration / 16);

@@ -496,6 +496,36 @@ app.delete('/api/slides/:id', requireAuth, (req, res) => {
 });
 
 // ===== CONTACT ROUTES =====
+
+// ===== SITE SETTINGS ROUTES =====
+app.get('/api/settings', (req, res) => {
+  const rows = all('SELECT key, value FROM site_settings');
+  const settings = {};
+  for (const row of rows) {
+    settings[row.key] = row.value;
+  }
+  res.json(settings);
+});
+
+app.put('/api/settings', requireAuth, (req, res) => {
+  const settings = req.body;
+  if (!settings || typeof settings !== 'object') {
+    return res.status(400).json({ error: 'Invalid settings data' });
+  }
+  for (const [key, value] of Object.entries(settings)) {
+    if (typeof key !== 'string' || key.length > 100) continue;
+    const cleanKey = key.replace(/[^a-zA-Z0-9_]/g, '_');
+    const existing = get('SELECT key FROM site_settings WHERE key = ?', [cleanKey]);
+    if (existing) {
+      run('UPDATE site_settings SET value = ? WHERE key = ?', [String(value).substring(0, 500), cleanKey]);
+    } else {
+      run('INSERT INTO site_settings (key, value) VALUES (?, ?)', [cleanKey, String(value).substring(0, 500)]);
+    }
+  }
+  res.json({ success: true });
+});
+
+// ===== CONTACT ROUTES (continued) =====
 app.get('/api/contact', (req, res) => {
   const contact = get('SELECT * FROM contact_info ORDER BY id DESC LIMIT 1');
   res.json(contact || {});
@@ -672,14 +702,15 @@ app.get('/api/backup/download', requireAuth, (req, res) => {
 app.get('/api/backup/download-all', requireAuth, (req, res) => {
   try {
     const data = {
-      version: 1,
+      version: 2,
       created_at: new Date().toISOString(),
       users: all('SELECT id, username, role, created_at FROM users'),
       products: all('SELECT * FROM products'),
       hero_settings: all('SELECT * FROM hero_settings'),
       contact_info: all('SELECT * FROM contact_info'),
       messages: all('SELECT * FROM messages'),
-      hero_slides: all('SELECT * FROM hero_slides')
+      hero_slides: all('SELECT * FROM hero_slides'),
+      site_settings: all('SELECT * FROM site_settings')
     };
     const json = JSON.stringify(data, null, 2);
     res.setHeader('Content-Type', 'application/json');
@@ -770,6 +801,15 @@ app.post('/api/backup/restore', requireAuth, (req, res) => {
               run('INSERT INTO hero_slides (title, subtitle, image_url, btn_text, btn_link, sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)',
                 [s.title || '', s.subtitle || '', s.image_url || '', s.btn_text || '', s.btn_link || '#', s.sort_order || 0, s.is_active !== undefined ? s.is_active : 1]);
             } catch (e) { console.error('[RESTORE SLIDE]', e.message); }
+          }
+        }
+
+        if (data.site_settings && Array.isArray(data.site_settings)) {
+          run('DELETE FROM site_settings');
+          for (const s of data.site_settings) {
+            try {
+              run('INSERT INTO site_settings (key, value) VALUES (?, ?)', [s.key, s.value]);
+            } catch (e) { console.error('[RESTORE SETTINGS]', e.message); }
           }
         }
 
