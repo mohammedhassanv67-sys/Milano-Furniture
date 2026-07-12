@@ -2,7 +2,7 @@ services:
   - type: web
     name: milano-furniture
     runtime: node
-    plan: free
+    plan: starter
     buildCommand: npm install
     startCommand: node server.js
     envVars:
@@ -10,3 +10,11 @@ services:
         value: production
       - key: SESSION_SECRET
         generateValue: true
+      - key: DB_PATH
+        value: /data/milano.db
+      - key: UPLOADS_PATH
+        value: /data/uploads
+    disks:
+      - name: persistent-data
+        mountPath: /data
+        sizeGB: 1

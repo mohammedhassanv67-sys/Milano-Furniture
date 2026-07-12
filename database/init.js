@@ -3,11 +3,15 @@ const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
 
-const dbPath = path.join(__dirname, 'milano.db');
+const dbPath = process.env.DB_PATH || path.join(__dirname, 'milano.db');
 
 let db = null;
 
 function saveDb() {
+  const dir = path.dirname(dbPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
   const data = db.export();
   const buffer = Buffer.from(data);
   fs.writeFileSync(dbPath, buffer);

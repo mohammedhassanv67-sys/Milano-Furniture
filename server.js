@@ -2,6 +2,7 @@ const express = require('express');
 const session = require('express-session');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const multer = require('multer');
 const QRCode = require('qrcode');
 const bcrypt = require('bcryptjs');
@@ -11,6 +12,7 @@ const { initDatabase, run, get, all, saveDb } = require('./database/init');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const UPLOADS_DIR = process.env.UPLOADS_PATH || path.join(__dirname, 'public/uploads');
 
 // ===== TRUST PROXY (for hosting platforms) =====
 app.set('trust proxy', 1);
@@ -124,9 +126,13 @@ app.use(session({
 
 // ===== MULTER STORAGE =====
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, 'public/uploads')),
+  destination: (req, file, cb) => {
+    if (!fs.existsSync(UPLOADS_DIR)) {
+      fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+    }
+    cb(null, UPLOADS_DIR);
+  },
   filename: (req, file, cb) => {
-    // Sanitize filename
     const cleanName = file.originalname
       .replace(/[^a-zA-Z0-9._-]/g, '_')
       .replace(/_{2,}/g, '_');
@@ -153,7 +159,7 @@ const upload = multer({
 });
 
 // ===== STATIC FILES (with restrictions) =====
-// Serve public static files BUT block script execution in uploads
+// Serve uploads from UPLOADS_DIR (persistent disk on Render, local on dev)
 app.use('/uploads', (req, res, next) => {
   const ext = path.extname(req.path).toLowerCase();
   const blockedExts = ['.js', '.html', '.htm', '.php', '.phtml', '.asp', '.aspx', '.jsp', '.cgi', '.sh', '.bat', '.cmd', '.exe', '.ps1'];
@@ -161,7 +167,7 @@ app.use('/uploads', (req, res, next) => {
     return res.status(403).json({ error: 'Forbidden' });
   }
   next();
-}, express.static(path.join(__dirname, 'public/uploads'), {
+}, express.static(UPLOADS_DIR, {
   maxAge: IS_PRODUCTION ? '30d' : '0',
   immutable: IS_PRODUCTION
 }));
@@ -641,6 +647,66 @@ app.get('/api/qr/:productId', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'Failed to generate QR code' });
   }
+});
+
+// ===== BACKUP & RESTORE ROUTES =====
+app.get('/api/backup/download', requireAuth, (req, res) => {
+  try {
+    const dbFile = fs.readFileSync(dbPath);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename=milano-db-backup-' + new Date().toISOString().slice(0,10) + '.db');
+    res.send(dbFile);
+  } catch (err) {
+    res.status(500).json({ error: 'فشل تحميل النسخة الاحتياطية' });
+  }
+});
+
+app.get('/api/backup/download-all', requireAuth, async (req, res) => {
+  try {
+    const archiver = require('archiver');
+    const { PassThrough } = require('stream');
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    const stream = new PassThrough();
+    archive.pipe(stream);
+    archive.file(dbPath, { name: 'milano.db' });
+    const uploadsDir = UPLOADS_DIR;
+    if (fs.existsSync(uploadsDir)) {
+      archive.directory(uploadsDir, 'uploads');
+    }
+    await archive.finalize();
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 'attachment; filename=milano-full-backup-' + new Date().toISOString().slice(0,10) + '.zip');
+    stream.pipe(res);
+  } catch (err) {
+    res.status(500).json({ error: 'فشل تحميل النسخة الاحتياطية الكاملة: ' + err.message });
+  }
+});
+
+app.post('/api/backup/restore', requireAuth, (req, res, next) => {
+  upload.single('database')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message || 'خطأ في رفع الملف' });
+    if (!req.file) return res.status(400).json({ error: 'لم يتم اختيار ملف' });
+    try {
+      const fileBuffer = fs.readFileSync(req.file.path);
+      const initSqlJs = require('sql.js');
+      initSqlJs().then(SQL => {
+        try {
+          const testDb = new SQL.Database(fileBuffer);
+          testDb.run('SELECT COUNT(*) FROM sqlite_master');
+          testDb.close();
+          fs.copyFileSync(req.file.path, dbPath);
+          fs.unlinkSync(req.file.path);
+          res.json({ success: true, message: 'تمت الاستعادة بنجاح. أعد تشغيل السيرفر.' });
+        } catch (e) {
+          fs.unlinkSync(req.file.path);
+          res.status(400).json({ error: 'ملف قاعدة البيانات غير صالح' });
+        }
+      });
+    } catch (err) {
+      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      res.status(500).json({ error: 'فشل استعادة قاعدة البيانات' });
+    }
+  });
 });
 
 // ===== PAGE ROUTES =====

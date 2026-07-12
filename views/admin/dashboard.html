@@ -121,6 +121,37 @@
       </div>
     </div>
 
+    <!-- Backup & Restore -->
+    <div class="table-container">
+      <div class="table-header">
+        <h2><i class="fas fa-shield-alt"></i> النسخ الاحتياطي والاستعادة</h2>
+      </div>
+      <div style="padding:20px;">
+        <p style="margin-bottom:15px; color:#666;">
+          حمّل نسخة احتياطية من قاعدة البيانات قبل أي تعديل أو نقل. يمكنك أيضاً استعادة نسخة سابقة.
+        </p>
+        <div style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
+          <a href="/api/backup/download" class="btn btn-primary" id="btnDownloadDb">
+            <i class="fas fa-database"></i> تحميل قاعدة البيانات فقط
+          </a>
+          <button class="btn btn-info" id="btnDownloadAll" onclick="downloadFullBackup()">
+            <i class="fas fa-download"></i> تحميل نسخة كاملة (قاعدة + صور)
+          </button>
+        </div>
+        <div style="border-top:1px solid #eee; padding-top:15px;">
+          <h3 style="margin-bottom:10px; font-size:1rem;">استعادة نسخة احتياطية</h3>
+          <form id="restoreForm" enctype="multipart/form-data" style="display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
+            <input type="file" name="database" accept=".db,.sqlite,.sqlite3" required
+                   style="padding:8px; border:1px solid #ddd; border-radius:6px;">
+            <button type="submit" class="btn btn-success" id="btnRestore">
+              <i class="fas fa-upload"></i> استعادة
+            </button>
+          </form>
+          <p style="font-size:0.8rem; color:#999; margin-top:8px;">الملف المدعوم: .db فقط</p>
+        </div>
+      </div>
+    </div>
+
     <!-- Recent Products -->
     <div class="table-container">
       <div class="table-header">
@@ -226,6 +257,60 @@
         alert('حدث خطأ أثناء الحذف');
       }
     }
+
+    async function downloadFullBackup() {
+      const btn = document.getElementById('btnDownloadAll');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التجهيز...';
+      try {
+        const res = await fetch('/api/backup/download-all');
+        if (!res.ok) throw new Error('Failed');
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'milano-full-backup-' + new Date().toISOString().slice(0,10) + '.zip';
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        alert('حدث خطأ أثناء تحميل النسخة الاحتياطية');
+      }
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-download"></i> تحميل نسخة كاملة (قاعدة + صور)';
+    }
+
+    document.getElementById('restoreForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('btnRestore');
+      const fileInput = e.target.querySelector('input[type="file"]');
+      if (!fileInput.files.length) return;
+      
+      if (!confirm('هل أنت متأكد؟ سيتم استبدال قاعدة البيانات الحالية بالنسخة المرفوعة. أعد تشغيل السيرفر بعد الاستعادة.')) return;
+      
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الاستعادة...';
+      
+      const formData = new FormData();
+      formData.append('database', fileInput.files[0]);
+      
+      try {
+        const res = await fetch('/api/backup/restore', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert('تمت الاستعادة بنجاح! أعد تشغيل السيرفر الآن.');
+        } else {
+          alert('خطأ: ' + (data.error || 'فشل الاستعادة'));
+        }
+      } catch (err) {
+        alert('حدث خطأ أثناء الاستعادة');
+      }
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-upload"></i> استعادة';
+      fileInput.value = '';
+    });
   </script>
 </body>
 </html>
