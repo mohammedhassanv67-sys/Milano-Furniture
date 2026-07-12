@@ -106,6 +106,32 @@
             للحصول على الرابط: افتح Google Maps → اختر الموقع → مشاركة → تضمين الخريطة → انسخ الكود
           </p>
         </div>
+
+        <div style="border-top: 2px solid #eee; padding-top: 20px; margin-top: 10px;">
+          <h3 style="margin-bottom: 15px; color: var(--black);"><i class="fab fa-facebook"></i> روابط التواصل الاجتماعي</h3>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label><i class="fab fa-facebook" style="color:#1877F2;"></i> فيسبوك</label>
+              <input type="url" id="facebook" placeholder="https://facebook.com/...">
+            </div>
+            <div class="form-group">
+              <label><i class="fab fa-instagram" style="color:#E4405F;"></i> انستقرام</label>
+              <input type="url" id="instagram" placeholder="https://instagram.com/...">
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label><i class="fab fa-tiktok" style="color:#000;"></i> تيكتوك</label>
+              <input type="url" id="tiktok" placeholder="https://tiktok.com/@...">
+            </div>
+            <div class="form-group">
+              <label><i class="fab fa-whatsapp" style="color:#25D366;"></i> واتساب (رقم مع رمز الدولة)</label>
+              <input type="url" id="whatsapp" placeholder="https://wa.me/966501234567">
+            </div>
+          </div>
+        </div>
         
         <button type="submit" class="btn btn-primary" style="padding:14px 40px;">
           <i class="fas fa-save"></i> حفظ معلومات التواصل
@@ -129,6 +155,10 @@
           document.getElementById('address').value = contact.address || '';
           document.getElementById('working_hours').value = contact.working_hours || '';
           document.getElementById('map_embed_url').value = contact.map_embed_url || '';
+          document.getElementById('facebook').value = contact.facebook || '';
+          document.getElementById('instagram').value = contact.instagram || '';
+          document.getElementById('tiktok').value = contact.tiktok || '';
+          document.getElementById('whatsapp').value = contact.whatsapp || '';
         }
       } catch (error) {
         console.error('Error loading contact:', error);
@@ -148,7 +178,11 @@
           email: document.getElementById('email').value,
           address: document.getElementById('address').value,
           working_hours: document.getElementById('working_hours').value,
-          map_embed_url: document.getElementById('map_embed_url').value
+          map_embed_url: document.getElementById('map_embed_url').value,
+          facebook: document.getElementById('facebook').value,
+          instagram: document.getElementById('instagram').value,
+          tiktok: document.getElementById('tiktok').value,
+          whatsapp: document.getElementById('whatsapp').value
         };
         
         const response = await fetch('/api/contact', {

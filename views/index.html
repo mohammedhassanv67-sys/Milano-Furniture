@@ -211,11 +211,11 @@
         <div class="footer-about">
           <h3>Milano Furniture</h3>
           <p>نقدم لكم أرقى قطع الأثاث الفاخرة التي تجمع بين الجمال والأناقة. مع Milano، حوّل منزلك إلى تحفة فنية.</p>
-          <div class="footer-social">
-            <a href="#" title="انستقرام"><i class="fab fa-instagram"></i></a>
-            <a href="#" title="فيسبوك"><i class="fab fa-facebook-f"></i></a>
-            <a href="#" title="تويتر"><i class="fab fa-twitter"></i></a>
-            <a href="#" title="واتساب"><i class="fab fa-whatsapp"></i></a>
+          <div class="footer-social" id="footerSocial">
+            <a href="#" title="فيسبوك" id="linkFacebook"><i class="fab fa-facebook-f"></i></a>
+            <a href="#" title="انستقرام" id="linkInstagram"><i class="fab fa-instagram"></i></a>
+            <a href="#" title="تيكتوك" id="linkTiktok"><i class="fab fa-tiktok"></i></a>
+            <a href="#" title="واتساب" id="linkWhatsapp"><i class="fab fa-whatsapp"></i></a>
           </div>
         </div>
         <div class="footer-links">
@@ -266,7 +266,7 @@
   </div>
 
   <!-- WhatsApp Button -->
-  <a href="https://wa.me/966501234567" target="_blank" class="whatsapp-btn" title="تواصل معنا واتساب">
+  <a href="https://wa.me/966501234567" target="_blank" class="whatsapp-btn" title="تواصل معنا واتساب" id="whatsappBtn">
     <i class="fab fa-whatsapp"></i>
   </a>
 
@@ -280,6 +280,18 @@
 
   <script src="/js/main.js"></script>
   <script>
+    // Load social links from API
+    fetch('/api/contact').then(r=>r.json()).then(c => {
+      if (c.facebook) document.getElementById('linkFacebook').href = c.facebook;
+      if (c.instagram) document.getElementById('linkInstagram').href = c.instagram;
+      if (c.tiktok) document.getElementById('linkTiktok').href = c.tiktok;
+      if (c.whatsapp) {
+        document.getElementById('linkWhatsapp').href = c.whatsapp;
+        document.getElementById('whatsappBtn').href = c.whatsapp;
+      }
+    }).catch(()=>{});
+
+    // Auth check (existing code)
     fetch('/api/auth/check').then(r=>r.json()).then(data => {
       const nav = document.getElementById('authNav');
       if (data.loggedIn) {

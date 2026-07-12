@@ -491,14 +491,14 @@ app.get('/api/contact', (req, res) => {
 });
 
 app.put('/api/contact', requireAuth, (req, res) => {
-  const { phone, email, address, map_embed_url, working_hours } = req.body;
+  const { phone, email, address, map_embed_url, working_hours, facebook, instagram, tiktok, whatsapp } = req.body;
   const existing = get('SELECT id FROM contact_info ORDER BY id DESC LIMIT 1');
   if (existing) {
-    run('UPDATE contact_info SET phone = ?, email = ?, address = ?, map_embed_url = ?, working_hours = ? WHERE id = ?',
-      [sanitize(phone), sanitize(email), sanitize(address), map_embed_url, sanitize(working_hours), existing.id]);
+    run('UPDATE contact_info SET phone = ?, email = ?, address = ?, map_embed_url = ?, working_hours = ?, facebook = ?, instagram = ?, tiktok = ?, whatsapp = ? WHERE id = ?',
+      [sanitize(phone), sanitize(email), sanitize(address), map_embed_url, sanitize(working_hours), facebook || null, instagram || null, tiktok || null, whatsapp || null, existing.id]);
   } else {
-    run('INSERT INTO contact_info (phone, email, address, map_embed_url, working_hours) VALUES (?, ?, ?, ?, ?)',
-      [sanitize(phone), sanitize(email), sanitize(address), map_embed_url, sanitize(working_hours)]);
+    run('INSERT INTO contact_info (phone, email, address, map_embed_url, working_hours, facebook, instagram, tiktok, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [sanitize(phone), sanitize(email), sanitize(address), map_embed_url, sanitize(working_hours), facebook || null, instagram || null, tiktok || null, whatsapp || null]);
   }
   res.json({ success: true });
 });

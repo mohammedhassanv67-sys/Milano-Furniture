@@ -86,7 +86,11 @@ async function initDatabase() {
     email TEXT,
     address TEXT,
     map_embed_url TEXT,
-    working_hours TEXT
+    working_hours TEXT,
+    facebook TEXT,
+    instagram TEXT,
+    tiktok TEXT,
+    whatsapp TEXT
   )`);
 
   run(`CREATE TABLE IF NOT EXISTS messages (
@@ -148,9 +152,17 @@ async function initDatabase() {
     if (!colNames.includes('video_url')) {
       run("ALTER TABLE products ADD COLUMN video_url TEXT");
     }
-  } catch (e) {
-    // Fresh DB
-  }
+  } catch (e) {}
+
+  // Migration: add social columns to contact_info
+  try {
+    const cols = all("PRAGMA table_info(contact_info)");
+    const colNames = cols.map(c => c.name);
+    if (!colNames.includes('facebook')) run("ALTER TABLE contact_info ADD COLUMN facebook TEXT");
+    if (!colNames.includes('instagram')) run("ALTER TABLE contact_info ADD COLUMN instagram TEXT");
+    if (!colNames.includes('tiktok')) run("ALTER TABLE contact_info ADD COLUMN tiktok TEXT");
+    if (!colNames.includes('whatsapp')) run("ALTER TABLE contact_info ADD COLUMN whatsapp TEXT");
+  } catch (e) {}
 
   saveDb();
   console.log('Database initialized successfully');

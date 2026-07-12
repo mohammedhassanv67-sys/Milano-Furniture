@@ -71,7 +71,7 @@
     }
     .share-btn-detail.whatsapp { background: #25D366; color: white; }
     .share-btn-detail.facebook { background: #1877F2; color: white; }
-    .share-btn-detail.twitter { background: #1DA1F2; color: white; }
+    .share-btn-detail.instagram { background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); color: white; }
     .share-btn-detail:hover { transform: translateY(-2px); opacity: 0.9; }
 
     .back-btn {
@@ -159,7 +159,7 @@
           <div class="share-buttons">
             <button class="share-btn-detail whatsapp" id="shareWhatsApp"><i class="fab fa-whatsapp"></i> مشاركة واتساب</button>
             <button class="share-btn-detail facebook" id="shareFacebook"><i class="fab fa-facebook-f"></i> فيسبوك</button>
-            <button class="share-btn-detail twitter" id="shareTwitter"><i class="fab fa-twitter"></i> تويتر</button>
+            <button class="share-btn-detail instagram" id="shareInstagram"><i class="fab fa-instagram"></i> انستقرام</button>
           </div>
         </div>
       </div>
@@ -232,10 +232,12 @@
         document.getElementById('shareFacebook').onclick = () => {
           window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, '_blank');
         };
-        document.getElementById('shareTwitter').onclick = () => {
-          window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareName)}&url=${encodeURIComponent(shareUrl)}`, '_blank');
+
+        document.getElementById('shareInstagram').onclick = () => {
+          navigator.clipboard.writeText(shareUrl + ' - ' + shareName).then(() => {
+            alert('تم نسخ رابط المنتج! الصقه في انستقرام');
+          });
         };
-        
       } catch (error) {
         console.error('Error loading product:', error);
       }
