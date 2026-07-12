@@ -149,20 +149,15 @@
 
     async function loadSettings() {
       try {
-        const [settingsRes, slidesRes, heroRes] = await Promise.all([
+        const [settingsRes, slidesRes] = await Promise.all([
           fetch('/api/settings'),
-          fetch('/api/slides/all'),
-          fetch('/api/hero/all')
+          fetch('/api/slides/all')
         ]);
         siteSettings = await settingsRes.json();
         slides = await slidesRes.json();
-        const heroes = await heroRes.json();
-        if (heroes.length > 0) {
-          const h = heroes[0];
-          document.getElementById('heroTitle').value = h.title || '';
-          document.getElementById('heroSubtitle').value = h.subtitle || '';
-          document.getElementById('heroLogo').value = h.logo_url || '';
-        }
+        document.getElementById('heroTitle').value = siteSettings.hero_title || '';
+        document.getElementById('heroSubtitle').value = siteSettings.hero_subtitle || '';
+        document.getElementById('heroLogo').value = siteSettings.hero_logo || '';
         document.getElementById('heroBtnText').value = siteSettings.hero_btn_text || 'اكتشف المعرض';
         document.getElementById('heroBtnLink').value = siteSettings.hero_btn_link || '#gallery';
       } catch (e) { console.error('Error loading:', e); }
@@ -351,10 +346,10 @@
     function renderCounters() {
       const container = document.getElementById('countersContainer');
       const counters = [
-        { key: 'counter_products', label: 'المنتج الأول' },
-        { key: 'counter_customers', label: 'المنتج الثاني' },
-        { key: 'counter_years', label: 'المنتج الثالث' },
-        { key: 'counter_cities', label: 'المنتج الرابع' }
+        { key: 'counter_products', label: 'العداد الأول' },
+        { key: 'counter_customers', label: 'العداد الثاني' },
+        { key: 'counter_years', label: 'العداد الثالث' },
+        { key: 'counter_cities', label: 'العداد الرابع' }
       ];
       container.innerHTML = counters.map(c => `
         <div class="counter-card" style="margin-bottom:15px;">
@@ -394,22 +389,12 @@
     // ===== HERO GENERAL SETTINGS =====
     async function saveHeroSettings() {
       try {
+        siteSettings.hero_title = document.getElementById('heroTitle').value;
+        siteSettings.hero_subtitle = document.getElementById('heroSubtitle').value;
+        siteSettings.hero_logo = document.getElementById('heroLogo').value;
         siteSettings.hero_btn_text = document.getElementById('heroBtnText').value;
         siteSettings.hero_btn_link = document.getElementById('heroBtnLink').value;
         await saveAllSettings();
-        const heroId = (await (await fetch('/api/hero/all')).json())[0]?.id;
-        const heroData = {
-          title: document.getElementById('heroTitle').value,
-          subtitle: document.getElementById('heroSubtitle').value,
-          background_image: '',
-          logo_url: document.getElementById('heroLogo').value,
-          is_active: 1
-        };
-        if (heroId) {
-          await fetch('/api/hero/' + heroId, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(heroData) });
-        } else {
-          await fetch('/api/hero', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(heroData) });
-        }
         showAlert('تم حفظ الإعدادات بنجاح!', 'success');
       } catch (e) { showAlert('حدث خطأ أثناء الحفظ', 'danger'); }
     }

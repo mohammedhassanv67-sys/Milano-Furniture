@@ -49,6 +49,21 @@ async function loadSiteSettings() {
 }
 
 function applyHeroSettings() {
+  const titleEl = document.querySelector('.hero-title');
+  if (titleEl && siteSettings.hero_title) {
+    titleEl.innerHTML = `<span>${siteSettings.hero_title}</span>`;
+  }
+
+  const subtitleEl = document.querySelector('.hero-subtitle .typing-text');
+  if (subtitleEl && siteSettings.hero_subtitle) {
+    subtitleEl.textContent = siteSettings.hero_subtitle;
+  }
+
+  const logoImg = document.getElementById('heroLogoImg');
+  if (logoImg && siteSettings.hero_logo) {
+    logoImg.src = siteSettings.hero_logo;
+  }
+
   const tagsContainer = document.getElementById('heroTags');
   if (tagsContainer) {
     const tags = [];
@@ -87,16 +102,6 @@ async function loadHeroSlides() {
     dots.innerHTML = slidesData.map((s, i) =>
       `<div class="hero-dot${i === 0 ? ' active' : ''}" data-slide="${i}"></div>`
     ).join('');
-
-    if (slidesData.length > 0) {
-      const first = slidesData[0];
-      const titleEl = document.querySelector('.hero-title');
-      if (titleEl && first.title) titleEl.innerHTML = `<span>${first.title}</span>`;
-      const subtitleEl = document.querySelector('.hero-subtitle .typing-text');
-      if (subtitleEl && first.subtitle) {
-        subtitleEl.textContent = first.subtitle;
-      }
-    }
   } catch (e) {
     console.error('Error loading slides:', e);
   }

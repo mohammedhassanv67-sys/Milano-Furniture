@@ -152,6 +152,11 @@ async function initDatabase() {
   }
 
   const defaultSettings = {
+    'hero_title': 'Milano Furniture',
+    'hero_subtitle': 'أثاث فاخر يعكس ذوقك الرفيع',
+    'hero_logo': '',
+    'hero_btn_text': 'اكتشف المعرض',
+    'hero_btn_link': '#gallery',
     'counter_products_value': '150',
     'counter_products_label': 'منتج متوفر',
     'counter_customers_value': '500',
@@ -177,6 +182,29 @@ async function initDatabase() {
       run('INSERT INTO site_settings (key, value) VALUES (?, ?)', [key, value]);
     }
   }
+
+  // Migration: copy hero_settings title to site_settings if hero_settings has data
+  try {
+    const heroRow = get('SELECT title, subtitle, logo_url FROM hero_settings WHERE id = 1');
+    if (heroRow) {
+      const titleSetting = get('SELECT key FROM site_settings WHERE key = ?', ['hero_title']);
+      if (titleSetting && titleSetting.value === 'Milano Furniture' && heroRow.title && heroRow.title !== 'Milano Furniture') {
+        run('UPDATE site_settings SET value = ? WHERE key = ?', [heroRow.title, 'hero_title']);
+      }
+      if (heroRow.subtitle) {
+        const subSetting = get('SELECT value FROM site_settings WHERE key = ?', ['hero_subtitle']);
+        if (subSetting && subSetting.value === 'أثاث فاخر يعكس ذوقك الرفيع' && heroRow.subtitle !== 'أثاث فاخر يعكس ذوقك الرفيع') {
+          run('UPDATE site_settings SET value = ? WHERE key = ?', [heroRow.subtitle, 'hero_subtitle']);
+        }
+      }
+      if (heroRow.logo_url) {
+        const logoSetting = get('SELECT key FROM site_settings WHERE key = ?', ['hero_logo']);
+        if (logoSetting && !logoSetting.value) {
+          run('UPDATE site_settings SET value = ? WHERE key = ?', [heroRow.logo_url, 'hero_logo']);
+        }
+      }
+    }
+  } catch (e) {}
 
   // Migration: ensure images/video_url columns exist for older DBs
   try {
