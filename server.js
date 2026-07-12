@@ -7,7 +7,7 @@ const multer = require('multer');
 const QRCode = require('qrcode');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const { initDatabase, run, get, all, saveDb, dbPath } = require('./database/init');
+const { initDatabase, run, get, all, getClient } = require('./database/init');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -67,7 +67,6 @@ function rateLimit(windowMs, maxRequests) {
   };
 }
 
-// Cleanup old entries every 10 minutes
 setInterval(() => {
   const now = Date.now();
   for (const key in rateLimitStore) {
@@ -94,7 +93,6 @@ app.use((req, res, next) => {
     }
   }
 
-  // Block common attack paths
   const attackPatterns = [
     '/wp-admin', '/wp-login', '/phpmyadmin', '/admin.php',
     '/.env', '/config.php', '/xmlrpc.php', '/cgi-bin/',
@@ -163,8 +161,7 @@ const backupUpload = multer({
   limits: { fileSize: 500 * 1024 * 1024 }
 });
 
-// ===== STATIC FILES (with restrictions) =====
-// Serve uploads from UPLOADS_DIR (persistent disk on Render, local on dev)
+// ===== STATIC FILES =====
 app.use('/uploads', (req, res, next) => {
   const ext = path.extname(req.path).toLowerCase();
   const blockedExts = ['.js', '.html', '.htm', '.php', '.phtml', '.asp', '.aspx', '.jsp', '.cgi', '.sh', '.bat', '.cmd', '.exe', '.ps1'];
@@ -177,7 +174,6 @@ app.use('/uploads', (req, res, next) => {
   immutable: IS_PRODUCTION
 }));
 
-// Serve other public files
 app.use(express.static(path.join(__dirname, 'public'), {
   maxAge: IS_PRODUCTION ? '7d' : '0',
   setHeaders: (res, filePath) => {
@@ -213,70 +209,67 @@ function sanitize(str) {
     .trim();
 }
 
-function sanitizeBody(obj) {
-  const cleaned = {};
-  for (const key in obj) {
-    if (typeof obj[key] === 'string') {
-      cleaned[key] = sanitize(obj[key]);
-    } else {
-      cleaned[key] = obj[key];
-    }
-  }
-  return cleaned;
-}
-
 // ===== AUTH ROUTES =====
-app.post('/api/auth/register', rateLimit(15 * 60 * 1000, 10), (req, res) => {
-  const { username, password } = req.body;
+app.post('/api/auth/register', rateLimit(15 * 60 * 1000, 10), async (req, res) => {
+  try {
+    const { username, password } = req.body;
 
-  if (!username || username.length < 3 || username.length > 30) {
-    return res.status(400).json({ error: 'اسم المستخدم يجب أن يكون 3-30 حرف' });
+    if (!username || username.length < 3 || username.length > 30) {
+      return res.status(400).json({ error: 'اسم المستخدم يجب أن يكون 3-30 حرف' });
+    }
+
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      return res.status(400).json({ error: 'اسم المستخدم يجب أن يحتوي على أحرف وأرقام فقط' });
+    }
+
+    if (!password || password.length < 8 || password.length > 128) {
+      return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 8-128 حرف' });
+    }
+
+    if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+      return res.status(400).json({ error: 'كلمة المرور يجب أن تحتوي على أحرف وأرقام' });
+    }
+
+    const existing = await get('SELECT id FROM users WHERE username = ?', [username]);
+    if (existing) {
+      return res.status(400).json({ error: 'اسم المستخدم مستخدم بالفعل' });
+    }
+
+    const hashedPassword = bcrypt.hashSync(password, 12);
+    await run('INSERT INTO users (username, password, role) VALUES (?, ?, ?)', [username, hashedPassword, 'user']);
+
+    res.json({ success: true, message: 'تم إنشاء الحساب بنجاح' });
+  } catch (error) {
+    console.error('[REGISTER ERROR]', error);
+    res.status(500).json({ error: 'خطأ في الخادم' });
   }
-
-  if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-    return res.status(400).json({ error: 'اسم المستخدم يجب أن يحتوي على أحرف وأرقام فقط' });
-  }
-
-  if (!password || password.length < 8 || password.length > 128) {
-    return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 8-128 حرف' });
-  }
-
-  if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
-    return res.status(400).json({ error: 'كلمة المرور يجب أن تحتوي على أحرف وأرقام' });
-  }
-
-  const existing = get('SELECT id FROM users WHERE username = ?', [username]);
-  if (existing) {
-    return res.status(400).json({ error: 'اسم المستخدم مستخدم بالفعل' });
-  }
-
-  const hashedPassword = bcrypt.hashSync(password, 12);
-  run('INSERT INTO users (username, password, role) VALUES (?, ?, ?)', [username, hashedPassword, 'user']);
-
-  res.json({ success: true, message: 'تم إنشاء الحساب بنجاح' });
 });
 
-app.post('/api/auth/login', rateLimit(15 * 60 * 1000, 10), (req, res) => {
-  const { username, password } = req.body;
+app.post('/api/auth/login', rateLimit(15 * 60 * 1000, 10), async (req, res) => {
+  try {
+    const { username, password } = req.body;
 
-  if (!username || !password) {
-    return res.status(400).json({ error: 'اسم المستخدم وكلمة المرور مطلوبان' });
-  }
-
-  const user = get('SELECT * FROM users WHERE username = ?', [username]);
-
-  if (!user || !bcrypt.compareSync(password, user.password)) {
-    return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
-  }
-
-  // Regenerate session to prevent session fixation
-  req.session.regenerate((err) => {
-    if (err) {
-      return res.status(500).json({ error: 'خطأ في الخادم' });
+    if (!username || !password) {
+      return res.status(400).json({ error: 'اسم المستخدم وكلمة المرور مطلوبان' });
     }
-    req.session.user = { id: user.id, username: user.username, role: user.role };
-    res.json({ success: true, user: { username: user.username, role: user.role } });
-  });
+
+    const user = await get('SELECT * FROM users WHERE username = ?', [username]);
+
+    if (!user || !bcrypt.compareSync(password, user.password)) {
+      return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
+    }
+
+    req.session.regenerate((err) => {
+      if (err) {
+        return res.status(500).json({ error: 'خطأ في الخادم' });
+      }
+      req.session.user = { id: user.id, username: user.username, role: user.role };
+      res.json({ success: true, user: { username: user.username, role: user.role } });
+    });
+  } catch (error) {
+    console.error('[LOGIN ERROR]', error);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
 app.post('/api/auth/logout', (req, res) => {
@@ -294,343 +287,472 @@ app.get('/api/auth/check', (req, res) => {
   }
 });
 
-app.get('/api/auth/check-username/:username', (req, res) => {
+app.get('/api/auth/check-username/:username', async (req, res) => {
   const username = req.params.username;
   if (!username || username.length < 3) {
     return res.json({ available: false });
   }
-  const existing = get('SELECT id FROM users WHERE username = ?', [username]);
+  const existing = await get('SELECT id FROM users WHERE username = ?', [username]);
   res.json({ available: !existing });
 });
 
 // ===== USER ACCOUNT ROUTES =====
-app.post('/api/account/change-password', requireLogin, rateLimit(60 * 60 * 1000, 10), (req, res) => {
-  const { currentPassword, newPassword } = req.body;
-  const user = get('SELECT * FROM users WHERE id = ?', [req.session.user.id]);
+app.post('/api/account/change-password', requireLogin, rateLimit(60 * 60 * 1000, 10), async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const user = await get('SELECT * FROM users WHERE id = ?', [req.session.user.id]);
 
-  if (!user || !bcrypt.compareSync(currentPassword, user.password)) {
-    return res.status(400).json({ error: 'كلمة المرور الحالية غير صحيحة' });
+    if (!user || !bcrypt.compareSync(currentPassword, user.password)) {
+      return res.status(400).json({ error: 'كلمة المرور الحالية غير صحيحة' });
+    }
+
+    if (!newPassword || newPassword.length < 8 || newPassword.length > 128) {
+      return res.status(400).json({ error: 'كلمة المرور الجديدة يجب أن تكون 8-128 حرف' });
+    }
+
+    if (!/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+      return res.status(400).json({ error: 'كلمة المرور الجديدة يجب أن تحتوي على أحرف وأرقام' });
+    }
+
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ error: 'كلمة المرور الجديدة مختلفة عن الحالية' });
+    }
+
+    const hashedPassword = bcrypt.hashSync(newPassword, 12);
+    await run('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, user.id]);
+    res.json({ success: true, message: 'تم تغيير كلمة المرور بنجاح' });
+  } catch (error) {
+    console.error('[CHANGE PASSWORD ERROR]', error);
+    res.status(500).json({ error: 'خطأ في الخادم' });
   }
-
-  if (!newPassword || newPassword.length < 8 || newPassword.length > 128) {
-    return res.status(400).json({ error: 'كلمة المرور الجديدة يجب أن تكون 8-128 حرف' });
-  }
-
-  if (!/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
-    return res.status(400).json({ error: 'كلمة المرور الجديدة يجب أن تحتوي على أحرف وأرقام' });
-  }
-
-  if (currentPassword === newPassword) {
-    return res.status(400).json({ error: 'كلمة المرور الجديدة مختلفة عن الحالية' });
-  }
-
-  const hashedPassword = bcrypt.hashSync(newPassword, 12);
-  run('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, user.id]);
-  res.json({ success: true, message: 'تم تغيير كلمة المرور بنجاح' });
 });
 
-app.post('/api/account/update', requireLogin, (req, res) => {
-  const { username } = req.body;
+app.post('/api/account/update', requireLogin, async (req, res) => {
+  try {
+    const { username } = req.body;
 
-  if (!username || username.length < 3 || username.length > 30) {
-    return res.status(400).json({ error: 'اسم المستخدم يجب أن يكون 3-30 حرف' });
+    if (!username || username.length < 3 || username.length > 30) {
+      return res.status(400).json({ error: 'اسم المستخدم يجب أن يكون 3-30 حرف' });
+    }
+
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      return res.status(400).json({ error: 'اسم المستخدم يجب أن يحتوي على أحرف وأرقام فقط' });
+    }
+
+    const existing = await get('SELECT id FROM users WHERE username = ? AND id != ?', [username, req.session.user.id]);
+    if (existing) {
+      return res.status(400).json({ error: 'اسم المستخدم مستخدم بالفعل' });
+    }
+
+    await run('UPDATE users SET username = ? WHERE id = ?', [username, req.session.user.id]);
+    req.session.user.username = username;
+    res.json({ success: true, message: 'تم تحديث الحساب بنجاح' });
+  } catch (error) {
+    console.error('[UPDATE ACCOUNT ERROR]', error);
+    res.status(500).json({ error: 'خطأ في الخادم' });
   }
-
-  if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-    return res.status(400).json({ error: 'اسم المستخدم يجب أن يحتوي على أحرف وأرقام فقط' });
-  }
-
-  const existing = get('SELECT id FROM users WHERE username = ? AND id != ?', [username, req.session.user.id]);
-  if (existing) {
-    return res.status(400).json({ error: 'اسم المستخدم مستخدم بالفعل' });
-  }
-
-  run('UPDATE users SET username = ? WHERE id = ?', [username, req.session.user.id]);
-  req.session.user.username = username;
-  res.json({ success: true, message: 'تم تحديث الحساب بنجاح' });
 });
 
 // ===== PRODUCTS ROUTES =====
-app.get('/api/products', (req, res) => {
-  const { category, available, search, minPrice, maxPrice } = req.query;
-  let query = 'SELECT * FROM products';
-  const params = [];
-  const conditions = [];
+app.get('/api/products', async (req, res) => {
+  try {
+    const { category, available, search, minPrice, maxPrice } = req.query;
+    let query = 'SELECT * FROM products';
+    const params = [];
+    const conditions = [];
 
-  if (category && ['salon', 'bedroom', 'dining', 'lshape', 'other'].includes(category)) {
-    conditions.push('category = ?');
-    params.push(category);
-  }
-  if (available !== undefined) {
-    conditions.push('is_available = ?');
-    params.push(available === 'true' ? 1 : 0);
-  }
-  if (search && search.length <= 100) {
-    conditions.push('(name LIKE ? OR description LIKE ?)');
-    params.push('%' + search + '%', '%' + search + '%');
-  }
-  if (minPrice && !isNaN(parseFloat(minPrice))) {
-    conditions.push('price >= ?');
-    params.push(parseFloat(minPrice));
-  }
-  if (maxPrice && !isNaN(parseFloat(maxPrice))) {
-    conditions.push('price <= ?');
-    params.push(parseFloat(maxPrice));
-  }
+    if (category && ['salon', 'bedroom', 'dining', 'lshape', 'other'].includes(category)) {
+      conditions.push('category = ?');
+      params.push(category);
+    }
+    if (available !== undefined) {
+      conditions.push('is_available = ?');
+      params.push(available === 'true' ? 1 : 0);
+    }
+    if (search && search.length <= 100) {
+      conditions.push('(name LIKE ? OR description LIKE ?)');
+      params.push('%' + search + '%', '%' + search + '%');
+    }
+    if (minPrice && !isNaN(parseFloat(minPrice))) {
+      conditions.push('price >= ?');
+      params.push(parseFloat(minPrice));
+    }
+    if (maxPrice && !isNaN(parseFloat(maxPrice))) {
+      conditions.push('price <= ?');
+      params.push(parseFloat(maxPrice));
+    }
 
-  if (conditions.length > 0) {
-    query += ' WHERE ' + conditions.join(' AND ');
-  }
-  query += ' ORDER BY created_at DESC';
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+    query += ' ORDER BY created_at DESC';
 
-  const products = all(query, params);
-  res.json(products);
+    const products = await all(query, params);
+    res.json(products);
+  } catch (error) {
+    console.error('[PRODUCTS ERROR]', error);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
-app.get('/api/products/stats/counts', requireAuth, (req, res) => {
-  const total = get('SELECT COUNT(*) as count FROM products');
-  const available = get('SELECT COUNT(*) as count FROM products WHERE is_available = 1');
-  const categories = get('SELECT COUNT(DISTINCT category) as count FROM products');
-  res.json({
-    total: total.count,
-    available: available.count,
-    categories: categories.count
-  });
-});
-
-app.get('/api/products/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  if (isNaN(id) || id < 1) {
-    return res.status(400).json({ error: 'Invalid product ID' });
+app.get('/api/products/stats/counts', requireAuth, async (req, res) => {
+  try {
+    const total = await get('SELECT COUNT(*) as count FROM products');
+    const available = await get('SELECT COUNT(*) as count FROM products WHERE is_available = 1');
+    const categories = await get('SELECT COUNT(DISTINCT category) as count FROM products');
+    res.json({
+      total: total.count,
+      available: available.count,
+      categories: categories.count
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
   }
-  const product = get('SELECT * FROM products WHERE id = ?', [id]);
-  if (!product) return res.status(404).json({ error: 'Product not found' });
-  res.json(product);
 });
 
-app.post('/api/products', requireAuth, (req, res) => {
-  const { name, description, price, images, video_url, category, is_available } = req.body;
-  const imagesJson = JSON.stringify(images || []);
-  run('INSERT INTO products (name, description, price, images, video_url, category, is_available) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [sanitize(name), sanitize(description), parseFloat(price) || 0, imagesJson, video_url || null, category || 'other', is_available !== undefined ? is_available : 1]);
-  const last = get('SELECT last_insert_rowid() as id');
-  res.json({ success: true, id: last.id });
-});
-
-app.put('/api/products/:id', requireAuth, (req, res) => {
-  const id = parseInt(req.params.id);
-  if (isNaN(id) || id < 1) {
-    return res.status(400).json({ error: 'Invalid product ID' });
+app.get('/api/products/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id) || id < 1) {
+      return res.status(400).json({ error: 'Invalid product ID' });
+    }
+    const product = await get('SELECT * FROM products WHERE id = ?', [id]);
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+    res.json(product);
+  } catch (error) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
   }
-  const { name, description, price, images, video_url, category, is_available } = req.body;
-  const imagesJson = JSON.stringify(images || []);
-  run('UPDATE products SET name = ?, description = ?, price = ?, images = ?, video_url = ?, category = ?, is_available = ? WHERE id = ?',
-    [sanitize(name), sanitize(description), parseFloat(price) || 0, imagesJson, video_url || null, category || 'other', is_available, id]);
-  res.json({ success: true });
 });
 
-app.delete('/api/products/:id', requireAuth, (req, res) => {
-  const id = parseInt(req.params.id);
-  if (isNaN(id) || id < 1) {
-    return res.status(400).json({ error: 'Invalid product ID' });
+app.post('/api/products', requireAuth, async (req, res) => {
+  try {
+    const { name, description, price, images, video_url, category, is_available } = req.body;
+    const imagesJson = JSON.stringify(images || []);
+    await run('INSERT INTO products (name, description, price, images, video_url, category, is_available) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [sanitize(name), sanitize(description), parseFloat(price) || 0, imagesJson, video_url || null, category || 'other', is_available !== undefined ? is_available : 1]);
+    const last = await get('SELECT last_insert_rowid() as id');
+    res.json({ success: true, id: Number(last.id) });
+  } catch (error) {
+    console.error('[ADD PRODUCT ERROR]', error);
+    res.status(500).json({ error: 'خطأ في الخادم' });
   }
-  run('DELETE FROM products WHERE id = ?', [id]);
-  res.json({ success: true });
+});
+
+app.put('/api/products/:id', requireAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id) || id < 1) {
+      return res.status(400).json({ error: 'Invalid product ID' });
+    }
+    const { name, description, price, images, video_url, category, is_available } = req.body;
+    const imagesJson = JSON.stringify(images || []);
+    await run('UPDATE products SET name = ?, description = ?, price = ?, images = ?, video_url = ?, category = ?, is_available = ? WHERE id = ?',
+      [sanitize(name), sanitize(description), parseFloat(price) || 0, imagesJson, video_url || null, category || 'other', is_available, id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[UPDATE PRODUCT ERROR]', error);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+app.delete('/api/products/:id', requireAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id) || id < 1) {
+      return res.status(400).json({ error: 'Invalid product ID' });
+    }
+    await run('DELETE FROM products WHERE id = ?', [id]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
 // ===== HERO ROUTES =====
-app.get('/api/hero', (req, res) => {
-  const hero = get('SELECT * FROM hero_settings WHERE is_active = 1 ORDER BY id DESC LIMIT 1');
-  res.json(hero || {});
+app.get('/api/hero', async (req, res) => {
+  try {
+    const hero = await get('SELECT * FROM hero_settings WHERE is_active = 1 ORDER BY id DESC LIMIT 1');
+    res.json(hero || {});
+  } catch (error) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
-app.get('/api/hero/all', requireAuth, (req, res) => {
-  const heroes = all('SELECT * FROM hero_settings ORDER BY id DESC');
-  res.json(heroes);
+app.get('/api/hero/all', requireAuth, async (req, res) => {
+  try {
+    const heroes = await all('SELECT * FROM hero_settings ORDER BY id DESC');
+    res.json(heroes);
+  } catch (error) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
-app.put('/api/hero/:id', requireAuth, (req, res) => {
-  const { title, subtitle, background_image, logo_url, is_active } = req.body;
-  run('UPDATE hero_settings SET title = ?, subtitle = ?, background_image = ?, logo_url = ?, is_active = ? WHERE id = ?',
-    [sanitize(title), sanitize(subtitle), background_image, logo_url, is_active, parseInt(req.params.id)]);
-  res.json({ success: true });
+app.put('/api/hero/:id', requireAuth, async (req, res) => {
+  try {
+    const { title, subtitle, background_image, logo_url, is_active } = req.body;
+    await run('UPDATE hero_settings SET title = ?, subtitle = ?, background_image = ?, logo_url = ?, is_active = ? WHERE id = ?',
+      [sanitize(title), sanitize(subtitle), background_image, logo_url, is_active, parseInt(req.params.id)]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
-app.post('/api/hero', requireAuth, (req, res) => {
-  const { title, subtitle, background_image, logo_url } = req.body;
-  run('INSERT INTO hero_settings (title, subtitle, background_image, logo_url) VALUES (?, ?, ?, ?)',
-    [sanitize(title), sanitize(subtitle), background_image, logo_url]);
-  const last = get('SELECT last_insert_rowid() as id');
-  res.json({ success: true, id: last.id });
+app.post('/api/hero', requireAuth, async (req, res) => {
+  try {
+    const { title, subtitle, background_image, logo_url } = req.body;
+    await run('INSERT INTO hero_settings (title, subtitle, background_image, logo_url) VALUES (?, ?, ?, ?)',
+      [sanitize(title), sanitize(subtitle), background_image, logo_url]);
+    const last = await get('SELECT last_insert_rowid() as id');
+    res.json({ success: true, id: Number(last.id) });
+  } catch (error) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
 // ===== HERO SLIDES ROUTES =====
-app.get('/api/slides', (req, res) => {
-  const slides = all('SELECT * FROM hero_slides WHERE is_active = 1 ORDER BY sort_order ASC');
-  res.json(slides);
+app.get('/api/slides', async (req, res) => {
+  try {
+    const slides = await all('SELECT * FROM hero_slides WHERE is_active = 1 ORDER BY sort_order ASC');
+    res.json(slides);
+  } catch (error) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
-app.get('/api/slides/all', requireAuth, (req, res) => {
-  const slides = all('SELECT * FROM hero_slides ORDER BY sort_order ASC');
-  res.json(slides);
+app.get('/api/slides/all', requireAuth, async (req, res) => {
+  try {
+    const slides = await all('SELECT * FROM hero_slides ORDER BY sort_order ASC');
+    res.json(slides);
+  } catch (error) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
-app.post('/api/slides', requireAuth, (req, res) => {
-  const { title, subtitle, image_url, btn_text, btn_link, sort_order } = req.body;
-  run('INSERT INTO hero_slides (title, subtitle, image_url, btn_text, btn_link, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
-    [sanitize(title), sanitize(subtitle), image_url, sanitize(btn_text), btn_link, sort_order || 0]);
-  const last = get('SELECT last_insert_rowid() as id');
-  res.json({ success: true, id: last.id });
+app.post('/api/slides', requireAuth, async (req, res) => {
+  try {
+    const { title, subtitle, image_url, btn_text, btn_link, sort_order } = req.body;
+    await run('INSERT INTO hero_slides (title, subtitle, image_url, btn_text, btn_link, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
+      [sanitize(title), sanitize(subtitle), image_url, sanitize(btn_text), btn_link, sort_order || 0]);
+    const last = await get('SELECT last_insert_rowid() as id');
+    res.json({ success: true, id: Number(last.id) });
+  } catch (error) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
-app.put('/api/slides/:id', requireAuth, (req, res) => {
-  const { title, subtitle, image_url, btn_text, btn_link, sort_order, is_active } = req.body;
-  run('UPDATE hero_slides SET title = ?, subtitle = ?, image_url = ?, btn_text = ?, btn_link = ?, sort_order = ?, is_active = ? WHERE id = ?',
-    [sanitize(title), sanitize(subtitle), image_url, sanitize(btn_text), btn_link, sort_order, is_active, parseInt(req.params.id)]);
-  res.json({ success: true });
+app.put('/api/slides/:id', requireAuth, async (req, res) => {
+  try {
+    const { title, subtitle, image_url, btn_text, btn_link, sort_order, is_active } = req.body;
+    await run('UPDATE hero_slides SET title = ?, subtitle = ?, image_url = ?, btn_text = ?, btn_link = ?, sort_order = ?, is_active = ? WHERE id = ?',
+      [sanitize(title), sanitize(subtitle), image_url, sanitize(btn_text), btn_link, sort_order, is_active, parseInt(req.params.id)]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
-app.delete('/api/slides/:id', requireAuth, (req, res) => {
-  run('DELETE FROM hero_slides WHERE id = ?', [parseInt(req.params.id)]);
-  res.json({ success: true });
+app.delete('/api/slides/:id', requireAuth, async (req, res) => {
+  try {
+    await run('DELETE FROM hero_slides WHERE id = ?', [parseInt(req.params.id)]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// ===== SITE SETTINGS ROUTES =====
+app.get('/api/settings', async (req, res) => {
+  try {
+    const rows = await all('SELECT key, value FROM site_settings');
+    const settings = {};
+    for (const row of rows) {
+      settings[row.key] = row.value;
+    }
+    res.json(settings);
+  } catch (error) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+app.put('/api/settings', requireAuth, async (req, res) => {
+  try {
+    const settings = req.body;
+    if (!settings || typeof settings !== 'object') {
+      return res.status(400).json({ error: 'Invalid settings data' });
+    }
+    for (const [key, value] of Object.entries(settings)) {
+      if (typeof key !== 'string' || key.length > 100) continue;
+      const cleanKey = key.replace(/[^a-zA-Z0-9_]/g, '_');
+      const existing = await get('SELECT key FROM site_settings WHERE key = ?', [cleanKey]);
+      if (existing) {
+        await run('UPDATE site_settings SET value = ? WHERE key = ?', [String(value).substring(0, 500), cleanKey]);
+      } else {
+        await run('INSERT INTO site_settings (key, value) VALUES (?, ?)', [cleanKey, String(value).substring(0, 500)]);
+      }
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[SETTINGS ERROR]', error);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
 // ===== CONTACT ROUTES =====
-
-// ===== SITE SETTINGS ROUTES =====
-app.get('/api/settings', (req, res) => {
-  const rows = all('SELECT key, value FROM site_settings');
-  const settings = {};
-  for (const row of rows) {
-    settings[row.key] = row.value;
+app.get('/api/contact', async (req, res) => {
+  try {
+    const contact = await get('SELECT * FROM contact_info ORDER BY id DESC LIMIT 1');
+    res.json(contact || {});
+  } catch (error) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
   }
-  res.json(settings);
 });
 
-app.put('/api/settings', requireAuth, (req, res) => {
-  const settings = req.body;
-  if (!settings || typeof settings !== 'object') {
-    return res.status(400).json({ error: 'Invalid settings data' });
-  }
-  for (const [key, value] of Object.entries(settings)) {
-    if (typeof key !== 'string' || key.length > 100) continue;
-    const cleanKey = key.replace(/[^a-zA-Z0-9_]/g, '_');
-    const existing = get('SELECT key FROM site_settings WHERE key = ?', [cleanKey]);
+app.put('/api/contact', requireAuth, async (req, res) => {
+  try {
+    const { phone, email, address, map_embed_url, working_hours, facebook, instagram, tiktok, whatsapp } = req.body;
+    const existing = await get('SELECT id FROM contact_info ORDER BY id DESC LIMIT 1');
     if (existing) {
-      run('UPDATE site_settings SET value = ? WHERE key = ?', [String(value).substring(0, 500), cleanKey]);
+      await run('UPDATE contact_info SET phone = ?, email = ?, address = ?, map_embed_url = ?, working_hours = ?, facebook = ?, instagram = ?, tiktok = ?, whatsapp = ? WHERE id = ?',
+        [sanitize(phone), sanitize(email), sanitize(address), map_embed_url, sanitize(working_hours), facebook || null, instagram || null, tiktok || null, whatsapp || null, existing.id]);
     } else {
-      run('INSERT INTO site_settings (key, value) VALUES (?, ?)', [cleanKey, String(value).substring(0, 500)]);
+      await run('INSERT INTO contact_info (phone, email, address, map_embed_url, working_hours, facebook, instagram, tiktok, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [sanitize(phone), sanitize(email), sanitize(address), map_embed_url, sanitize(working_hours), facebook || null, instagram || null, tiktok || null, whatsapp || null]);
     }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[CONTACT ERROR]', error);
+    res.status(500).json({ error: 'خطأ في الخادم' });
   }
-  res.json({ success: true });
-});
-
-// ===== CONTACT ROUTES (continued) =====
-app.get('/api/contact', (req, res) => {
-  const contact = get('SELECT * FROM contact_info ORDER BY id DESC LIMIT 1');
-  res.json(contact || {});
-});
-
-app.put('/api/contact', requireAuth, (req, res) => {
-  const { phone, email, address, map_embed_url, working_hours, facebook, instagram, tiktok, whatsapp } = req.body;
-  const existing = get('SELECT id FROM contact_info ORDER BY id DESC LIMIT 1');
-  if (existing) {
-    run('UPDATE contact_info SET phone = ?, email = ?, address = ?, map_embed_url = ?, working_hours = ?, facebook = ?, instagram = ?, tiktok = ?, whatsapp = ? WHERE id = ?',
-      [sanitize(phone), sanitize(email), sanitize(address), map_embed_url, sanitize(working_hours), facebook || null, instagram || null, tiktok || null, whatsapp || null, existing.id]);
-  } else {
-    run('INSERT INTO contact_info (phone, email, address, map_embed_url, working_hours, facebook, instagram, tiktok, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [sanitize(phone), sanitize(email), sanitize(address), map_embed_url, sanitize(working_hours), facebook || null, instagram || null, tiktok || null, whatsapp || null]);
-  }
-  res.json({ success: true });
 });
 
 // ===== MESSAGES ROUTES =====
-app.post('/api/messages', rateLimit(60 * 60 * 1000, 20), (req, res) => {
-  const { name, email, phone, subject, message } = req.body;
+app.post('/api/messages', rateLimit(60 * 60 * 1000, 20), async (req, res) => {
+  try {
+    const { name, email, phone, subject, message } = req.body;
 
-  if (!name || !email || !message) {
-    return res.status(400).json({ error: 'الاسم والإيميل والرسالة مطلوبة' });
+    if (!name || !email || !message) {
+      return res.status(400).json({ error: 'الاسم والإيميل والرسالة مطلوبة' });
+    }
+
+    if (name.length > 100 || email.length > 200 || (message && message.length > 5000)) {
+      return res.status(400).json({ error: 'البيانات طويلة جداً' });
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'البريد الإلكتروني غير صحيح' });
+    }
+
+    const userId = req.session && req.session.user ? req.session.user.id : null;
+
+    await run('INSERT INTO messages (user_id, name, email, phone, subject, message) VALUES (?, ?, ?, ?, ?, ?)',
+      [userId, sanitize(name), sanitize(email), sanitize(phone), sanitize(subject), sanitize(message)]);
+
+    const last = await get('SELECT last_insert_rowid() as id');
+    res.json({ success: true, id: Number(last.id), message: 'تم إرسال رسالتك بنجاح' });
+  } catch (error) {
+    console.error('[MESSAGE ERROR]', error);
+    res.status(500).json({ error: 'خطأ في الخادم' });
   }
+});
 
-  if (name.length > 100 || email.length > 200 || (message && message.length > 5000)) {
-    return res.status(400).json({ error: 'البيانات طويلة جداً' });
+app.get('/api/messages', requireAuth, async (req, res) => {
+  try {
+    const messages = await all('SELECT * FROM messages ORDER BY created_at DESC');
+    res.json(messages);
+  } catch (error) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
   }
+});
 
-  // Basic email validation
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return res.status(400).json({ error: 'البريد الإلكتروني غير صحيح' });
+app.get('/api/messages/unread', requireAuth, async (req, res) => {
+  try {
+    const count = await get('SELECT COUNT(*) as count FROM messages WHERE is_read = 0');
+    res.json({ count: count.count });
+  } catch (error) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
   }
-
-  const userId = req.session && req.session.user ? req.session.user.id : null;
-
-  run('INSERT INTO messages (user_id, name, email, phone, subject, message) VALUES (?, ?, ?, ?, ?, ?)',
-    [userId, sanitize(name), sanitize(email), sanitize(phone), sanitize(subject), sanitize(message)]);
-
-  const last = get('SELECT last_insert_rowid() as id');
-  res.json({ success: true, id: last.id, message: 'تم إرسال رسالتك بنجاح' });
 });
 
-app.get('/api/messages', requireAuth, (req, res) => {
-  const messages = all('SELECT * FROM messages ORDER BY created_at DESC');
-  res.json(messages);
+app.put('/api/messages/:id/read', requireAuth, async (req, res) => {
+  try {
+    await run('UPDATE messages SET is_read = 1 WHERE id = ?', [parseInt(req.params.id)]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
-app.get('/api/messages/unread', requireAuth, (req, res) => {
-  const count = get('SELECT COUNT(*) as count FROM messages WHERE is_read = 0');
-  res.json({ count: count.count });
+app.put('/api/messages/:id/reply', requireAuth, async (req, res) => {
+  try {
+    const { reply } = req.body;
+    await run('UPDATE messages SET reply = ? WHERE id = ?', [sanitize(reply), parseInt(req.params.id)]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
-app.put('/api/messages/:id/read', requireAuth, (req, res) => {
-  run('UPDATE messages SET is_read = 1 WHERE id = ?', [parseInt(req.params.id)]);
-  res.json({ success: true });
-});
-
-app.put('/api/messages/:id/reply', requireAuth, (req, res) => {
-  const { reply } = req.body;
-  run('UPDATE messages SET reply = ? WHERE id = ?', [sanitize(reply), parseInt(req.params.id)]);
-  res.json({ success: true });
-});
-
-app.delete('/api/messages/:id', requireAuth, (req, res) => {
-  run('DELETE FROM messages WHERE id = ?', [parseInt(req.params.id)]);
-  res.json({ success: true });
+app.delete('/api/messages/:id', requireAuth, async (req, res) => {
+  try {
+    await run('DELETE FROM messages WHERE id = ?', [parseInt(req.params.id)]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
 // ===== USERS MANAGEMENT (Admin) =====
-app.get('/api/users', requireAuth, (req, res) => {
-  const users = all('SELECT id, username, role, created_at FROM users ORDER BY created_at DESC');
-  res.json(users);
+app.get('/api/users', requireAuth, async (req, res) => {
+  try {
+    const users = await all('SELECT id, username, role, created_at FROM users ORDER BY created_at DESC');
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
-app.put('/api/users/:id/role', requireAuth, (req, res) => {
-  const { role } = req.body;
-  if (!['admin', 'user'].includes(role)) {
-    return res.status(400).json({ error: 'Invalid role' });
+app.put('/api/users/:id/role', requireAuth, async (req, res) => {
+  try {
+    const { role } = req.body;
+    if (!['admin', 'user'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role' });
+    }
+    await run('UPDATE users SET role = ? WHERE id = ?', [role, parseInt(req.params.id)]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
   }
-  run('UPDATE users SET role = ? WHERE id = ?', [role, parseInt(req.params.id)]);
-  res.json({ success: true });
 });
 
-app.delete('/api/users/:id', requireAuth, (req, res) => {
-  const user = get('SELECT id, username FROM users WHERE id = ?', [parseInt(req.params.id)]);
-  if (user && user.username === 'admin') {
-    return res.status(400).json({ error: 'لا يمكن حذف الأدمن الرئيسي' });
+app.delete('/api/users/:id', requireAuth, async (req, res) => {
+  try {
+    const user = await get('SELECT id, username FROM users WHERE id = ?', [parseInt(req.params.id)]);
+    if (user && user.username === 'admin') {
+      return res.status(400).json({ error: 'لا يمكن حذف الأدمن الرئيسي' });
+    }
+    await run('DELETE FROM users WHERE id = ?', [parseInt(req.params.id)]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
   }
-  run('DELETE FROM users WHERE id = ?', [parseInt(req.params.id)]);
-  res.json({ success: true });
 });
 
-app.put('/api/users/:id/password', requireAuth, rateLimit(60 * 60 * 1000, 20), (req, res) => {
-  const { password } = req.body;
-  if (!password || password.length < 8 || password.length > 128) {
-    return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 8-128 حرف' });
+app.put('/api/users/:id/password', requireAuth, rateLimit(60 * 60 * 1000, 20), async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password || password.length < 8 || password.length > 128) {
+      return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 8-128 حرف' });
+    }
+    if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+      return res.status(400).json({ error: 'كلمة المرور يجب أن تحتوي على أحرف وأرقام' });
+    }
+    const hashedPassword = bcrypt.hashSync(password, 12);
+    await run('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, parseInt(req.params.id)]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
   }
-  if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
-    return res.status(400).json({ error: 'كلمة المرور يجب أن تحتوي على أحرف وأرقام' });
-  }
-  const hashedPassword = bcrypt.hashSync(password, 12);
-  run('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, parseInt(req.params.id)]);
-  res.json({ success: true });
 });
 
 // ===== UPLOAD ROUTES =====
@@ -667,7 +789,7 @@ app.get('/api/qr/:productId', async (req, res) => {
     if (isNaN(id) || id < 1) {
       return res.status(400).json({ error: 'Invalid product ID' });
     }
-    const product = get('SELECT * FROM products WHERE id = ?', [id]);
+    const product = await get('SELECT * FROM products WHERE id = ?', [id]);
     if (!product) return res.status(404).json({ error: 'Product not found' });
 
     const host = req.get('host') || req.hostname + ':' + PORT;
@@ -685,32 +807,44 @@ app.get('/api/qr/:productId', async (req, res) => {
 });
 
 // ===== BACKUP & RESTORE ROUTES =====
-app.get('/api/backup/download', requireAuth, (req, res) => {
+app.get('/api/backup/download', requireAuth, async (req, res) => {
   try {
-    if (!fs.existsSync(dbPath)) {
-      return res.status(404).json({ error: 'قاعدة البيانات غير موجودة' });
-    }
-    const dbFile = fs.readFileSync(dbPath);
-    res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', 'attachment; filename=milano-db-backup-' + new Date().toISOString().slice(0,10) + '.db');
-    res.send(dbFile);
+    const rows = await all('SELECT key, value FROM site_settings');
+    const users = await all('SELECT id, username, role, created_at FROM users');
+    const products = await all('SELECT * FROM products');
+    const hero_settings = await all('SELECT * FROM hero_settings');
+    const contact_info = await all('SELECT * FROM contact_info');
+    const messages = await all('SELECT * FROM messages');
+    const hero_slides = await all('SELECT * FROM hero_slides');
+
+    const data = {
+      version: 2,
+      created_at: new Date().toISOString(),
+      users, products, hero_settings, contact_info, messages, hero_slides,
+      site_settings: rows
+    };
+
+    const json = JSON.stringify(data, null, 2);
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename=milano-db-backup-' + new Date().toISOString().slice(0,10) + '.json');
+    res.send(json);
   } catch (err) {
     res.status(500).json({ error: 'فشل تحميل النسخة الاحتياطية: ' + err.message });
   }
 });
 
-app.get('/api/backup/download-all', requireAuth, (req, res) => {
+app.get('/api/backup/download-all', requireAuth, async (req, res) => {
   try {
     const data = {
       version: 2,
       created_at: new Date().toISOString(),
-      users: all('SELECT id, username, role, created_at FROM users'),
-      products: all('SELECT * FROM products'),
-      hero_settings: all('SELECT * FROM hero_settings'),
-      contact_info: all('SELECT * FROM contact_info'),
-      messages: all('SELECT * FROM messages'),
-      hero_slides: all('SELECT * FROM hero_slides'),
-      site_settings: all('SELECT * FROM site_settings')
+      users: await all('SELECT id, username, role, created_at FROM users'),
+      products: await all('SELECT * FROM products'),
+      hero_settings: await all('SELECT * FROM hero_settings'),
+      contact_info: await all('SELECT * FROM contact_info'),
+      messages: await all('SELECT * FROM messages'),
+      hero_slides: await all('SELECT * FROM hero_slides'),
+      site_settings: await all('SELECT * FROM site_settings')
     };
     const json = JSON.stringify(data, null, 2);
     res.setHeader('Content-Type', 'application/json');
@@ -723,7 +857,7 @@ app.get('/api/backup/download-all', requireAuth, (req, res) => {
 });
 
 app.post('/api/backup/restore', requireAuth, (req, res) => {
-  backupUpload.single('database')(req, res, (err) => {
+  backupUpload.single('database')(req, res, async (err) => {
     if (err) {
       console.error('[RESTORE UPLOAD ERROR]', err.message);
       return res.status(400).json({ error: 'خطأ في رفع الملف: ' + err.message });
@@ -744,96 +878,80 @@ app.post('/api/backup/restore', requireAuth, (req, res) => {
         }
 
         if (data.users && Array.isArray(data.users)) {
-          run('DELETE FROM users WHERE username != ?', ['admin']);
+          await run('DELETE FROM users WHERE username != ?', ['admin']);
           for (const u of data.users) {
             if (!u.username || u.username === 'admin') continue;
             try {
-              run('INSERT OR IGNORE INTO users (username, password, role, created_at) VALUES (?, ?, ?, ?)',
+              await run('INSERT OR IGNORE INTO users (username, password, role, created_at) VALUES (?, ?, ?, ?)',
                 [u.username, u.password, u.role || 'user', u.created_at || new Date().toISOString()]);
             } catch (e) { console.error('[RESTORE USER]', e.message); }
           }
         }
 
         if (data.products && Array.isArray(data.products)) {
-          run('DELETE FROM products');
+          await run('DELETE FROM products');
           for (const p of data.products) {
             try {
-              run('INSERT INTO products (name, description, price, images, video_url, category, is_available, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+              await run('INSERT INTO products (name, description, price, images, video_url, category, is_available, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                 [p.name, p.description || '', p.price || 0, p.images || '[]', p.video_url || null, p.category || 'other', p.is_available !== undefined ? p.is_available : 1, p.created_at || new Date().toISOString()]);
             } catch (e) { console.error('[RESTORE PRODUCT]', e.message); }
           }
         }
 
         if (data.hero_settings && Array.isArray(data.hero_settings)) {
-          run('DELETE FROM hero_settings');
+          await run('DELETE FROM hero_settings');
           for (const h of data.hero_settings) {
             try {
-              run('INSERT INTO hero_settings (title, subtitle, background_image, logo_url, is_active) VALUES (?, ?, ?, ?, ?)',
+              await run('INSERT INTO hero_settings (title, subtitle, background_image, logo_url, is_active) VALUES (?, ?, ?, ?, ?)',
                 [h.title || 'Milano Furniture', h.subtitle || '', h.background_image || null, h.logo_url || null, h.is_active !== undefined ? h.is_active : 1]);
             } catch (e) { console.error('[RESTORE HERO]', e.message); }
           }
         }
 
         if (data.contact_info && Array.isArray(data.contact_info)) {
-          run('DELETE FROM contact_info');
+          await run('DELETE FROM contact_info');
           for (const c of data.contact_info) {
             try {
-              run('INSERT INTO contact_info (phone, email, address, map_embed_url, working_hours, facebook, instagram, tiktok, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              await run('INSERT INTO contact_info (phone, email, address, map_embed_url, working_hours, facebook, instagram, tiktok, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 [c.phone || '', c.email || '', c.address || '', c.map_embed_url || '', c.working_hours || '', c.facebook || null, c.instagram || null, c.tiktok || null, c.whatsapp || null]);
             } catch (e) { console.error('[RESTORE CONTACT]', e.message); }
           }
         }
 
         if (data.messages && Array.isArray(data.messages)) {
-          run('DELETE FROM messages');
+          await run('DELETE FROM messages');
           for (const m of data.messages) {
             try {
-              run('INSERT INTO messages (name, email, phone, subject, message, reply, is_read, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+              await run('INSERT INTO messages (name, email, phone, subject, message, reply, is_read, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                 [m.name, m.email, m.phone || '', m.subject || '', m.message, m.reply || null, m.is_read || 0, m.created_at || new Date().toISOString()]);
             } catch (e) { console.error('[RESTORE MSG]', e.message); }
           }
         }
 
         if (data.hero_slides && Array.isArray(data.hero_slides)) {
-          run('DELETE FROM hero_slides');
+          await run('DELETE FROM hero_slides');
           for (const s of data.hero_slides) {
             try {
-              run('INSERT INTO hero_slides (title, subtitle, image_url, btn_text, btn_link, sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)',
+              await run('INSERT INTO hero_slides (title, subtitle, image_url, btn_text, btn_link, sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)',
                 [s.title || '', s.subtitle || '', s.image_url || '', s.btn_text || '', s.btn_link || '#', s.sort_order || 0, s.is_active !== undefined ? s.is_active : 1]);
             } catch (e) { console.error('[RESTORE SLIDE]', e.message); }
           }
         }
 
         if (data.site_settings && Array.isArray(data.site_settings)) {
-          run('DELETE FROM site_settings');
+          await run('DELETE FROM site_settings');
           for (const s of data.site_settings) {
             try {
-              run('INSERT INTO site_settings (key, value) VALUES (?, ?)', [s.key, s.value]);
+              await run('INSERT INTO site_settings (key, value) VALUES (?, ?)', [s.key, s.value]);
             } catch (e) { console.error('[RESTORE SETTINGS]', e.message); }
           }
         }
 
         fs.unlinkSync(filePath);
-        res.json({ success: true, message: 'تمت الاستعادة بنجاح من ملف JSON' });
+        res.json({ success: true, message: 'تمت الاستعادة بنجاح' });
       } else {
-        const fileBuffer = fs.readFileSync(filePath);
-        const initSqlJs = require('sql.js');
-        initSqlJs().then(SQL => {
-          try {
-            const testDb = new SQL.Database(fileBuffer);
-            testDb.run('SELECT COUNT(*) FROM sqlite_master');
-            testDb.close();
-            fs.copyFileSync(filePath, dbPath);
-            fs.unlinkSync(filePath);
-            res.json({ success: true, message: 'تمت الاستعادة بنجاح من ملف DB' });
-          } catch (e) {
-            try { fs.unlinkSync(filePath); } catch(x) {}
-            res.status(400).json({ error: 'ملف قاعدة البيانات غير صالح' });
-          }
-        }).catch(e => {
-          try { fs.unlinkSync(filePath); } catch(x) {}
-          res.status(500).json({ error: 'خطأ في تحميل sql.js' });
-        });
+        fs.unlinkSync(filePath);
+        res.status(400).json({ error: 'يجب استخدام ملف JSON للاستعادة' });
       }
     } catch (err) {
       console.error('[RESTORE ERROR]', err.message);
@@ -851,7 +969,7 @@ app.get('/account', requireLogin, (req, res) => res.sendFile(path.join(__dirname
 app.get('/settings', requireLogin, (req, res) => res.sendFile(path.join(__dirname, 'views', 'settings.html')));
 app.get('/product.html', (req, res) => res.sendFile(path.join(__dirname, 'views', 'product.html')));
 
-// Admin routes (all protected)
+// Admin routes
 app.get('/admin', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'views', 'admin', 'dashboard.html')));
 app.get('/admin/products', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'views', 'admin', 'products.html')));
 app.get('/admin/products/add', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'views', 'admin', 'add-product.html')));
@@ -899,6 +1017,7 @@ initDatabase().then(() => {
     ips.forEach(ip => console.log(`  Network:  http://${ip}:${PORT}`));
     console.log(`  Admin:    http://localhost:${PORT}/admin`);
     console.log(`  Login:    admin / admin123`);
+    console.log(`  DB:       ${process.env.TURSO_DATABASE_URL ? 'Turso' : 'Local file'}`);
     console.log(`  Env:      ${IS_PRODUCTION ? 'Production' : 'Development'}`);
     console.log('========================================\n');
   });

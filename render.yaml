@@ -2,7 +2,6 @@ services:
   - type: web
     name: milano-furniture
     runtime: node
-    plan: starter
     buildCommand: npm install
     startCommand: node server.js
     envVars:
@@ -10,8 +9,10 @@ services:
         value: production
       - key: SESSION_SECRET
         generateValue: true
-      - key: DB_PATH
-        value: /data/milano.db
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
       - key: UPLOADS_PATH
         value: /data/uploads
     disks:
