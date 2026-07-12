@@ -141,20 +141,8 @@ a { text-decoration: none; color: inherit; }
 }
 .hero-dot.active { background: var(--gold); transform: scale(1.2); }
 
-.hero-arrows {
-  position: absolute; top: 50%; transform: translateY(-50%);
-  width: 100%; display: flex; justify-content: space-between;
-  padding: 0 20px; z-index: 5; pointer-events: none;
-}
-
-.hero-arrow {
-  width: 50px; height: 50px; border-radius: 50%;
-  background: rgba(197,165,114,0.8); color: var(--white);
-  border: none; font-size: 1.2rem; cursor: pointer;
-  pointer-events: all; transition: var(--transition);
-  display: flex; align-items: center; justify-content: center;
-}
-.hero-arrow:hover { background: var(--gold); transform: scale(1.1); }
+.hero-arrows { display: none; }
+.hero-arrow { display: none; }
 
 .scroll-indicator {
   position: absolute; bottom: 30px; left: 50%;
@@ -502,6 +490,7 @@ a { text-decoration: none; color: inherit; }
   .footer-grid { grid-template-columns: 1fr 1fr; }
   .counter-grid { grid-template-columns: repeat(2, 1fr); }
   .quickview-grid { grid-template-columns: 1fr; }
+  .gallery-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
 @media (max-width: 768px) {
@@ -510,13 +499,42 @@ a { text-decoration: none; color: inherit; }
     position: fixed; top: 70px; right: -100%; width: 70%;
     height: calc(100vh - 70px); background: var(--black);
     flex-direction: column; padding: 30px; transition: var(--transition);
+    overflow-y: auto;
   }
   .nav-links.active { right: 0; }
-  .hero h1 { font-size: 2.2rem; }
-  .hero p { font-size: 1.1rem; }
-  .section-header h2 { font-size: 2rem; }
-  .gallery-grid { grid-template-columns: 1fr; }
-  .footer-grid { grid-template-columns: 1fr; }
-  .counter-grid { grid-template-columns: 1fr 1fr; }
+  .nav-links li { margin: 5px 0; }
+  .nav-links li a { font-size: 0.95rem; padding: 10px 0; white-space: nowrap; }
+  .hero h1 { font-size: 2rem; }
+  .hero p { font-size: 1rem; }
+  .hero-content { padding: 20px; }
+  .hero-subtitle { font-size: 1rem; }
+  .section { padding: 60px 0; }
+  .section-header h2 { font-size: 1.8rem; }
+  .section-header p { font-size: 0.95rem; }
+  .gallery-grid { grid-template-columns: 1fr; gap: 15px; }
+  .product-card { border-radius: 12px; }
+  .product-image { height: 220px; }
+  .product-info { padding: 15px; }
+  .product-info h3 { font-size: 1.1rem; }
+  .footer-grid { grid-template-columns: 1fr; gap: 25px; }
+  .counter-grid { grid-template-columns: 1fr 1fr; gap: 15px; }
+  .counter-number { font-size: 2rem; }
+  .counter-label { font-size: 0.85rem; }
   .form-row { grid-template-columns: 1fr; }
+  .search-bar { flex-direction: column; gap: 10px; }
+  .price-filter { width: 100%; justify-content: center; }
+  .toast { min-width: auto; margin: 0 10px; font-size: 0.85rem; }
+  .toast-container { left: 10px; right: 10px; }
+  .whatsapp-btn { width: 50px; height: 50px; font-size: 1.5rem; bottom: 20px; left: 20px; }
+  .back-to-top { width: 42px; height: 42px; font-size: 1rem; bottom: 20px; right: 20px; }
+}
+
+@media (max-width: 480px) {
+  .hero h1 { font-size: 1.7rem; }
+  .hero-subtitle { font-size: 0.9rem; }
+  .section-header h2 { font-size: 1.5rem; }
+  .counter-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .counter-number { font-size: 1.6rem; }
+  .counter-label { font-size: 0.8rem; }
+  .nav-admin-btn { font-size: 0.8rem; padding: 6px 10px; }
 }

@@ -56,11 +56,6 @@ function initHeroSlider() {
     showSlide(currentSlide);
   }
 
-  const prevBtn = document.querySelector('.hero-arrow.prev');
-  const nextBtn = document.querySelector('.hero-arrow.next');
-  if (prevBtn) prevBtn.addEventListener('click', () => { resetInterval(); prevSlide(); });
-  if (nextBtn) nextBtn.addEventListener('click', () => { resetInterval(); nextSlide(); });
-
   document.querySelectorAll('.hero-dot').forEach(dot => {
     dot.addEventListener('click', () => {
       currentSlide = parseInt(dot.dataset.slide);

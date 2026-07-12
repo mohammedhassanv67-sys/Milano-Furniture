@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>تفاصيل المنتج - Milano Furniture</title>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -81,9 +81,28 @@
     .back-btn:hover { color: var(--gold-dark); }
 
     @media (max-width: 768px) {
-      .gallery-section { grid-template-columns: 1fr; }
-      .main-image-wrapper img { height: 350px; }
-      .detail-info h1 { font-size: 1.8rem; }
+      .product-detail { padding: 90px 0 40px; }
+      .gallery-section { grid-template-columns: 1fr; gap: 20px; }
+      .main-image-wrapper img { height: 280px; }
+      .gallery-nav { width: 36px; height: 36px; font-size: 0.9rem; }
+      .thumbnails { gap: 6px; }
+      .thumb { width: 60px; height: 60px; border-width: 2px; }
+      .detail-info h1 { font-size: 1.6rem; }
+      .detail-info .price { font-size: 1.5rem; }
+      .detail-info .description { font-size: 0.95rem; }
+      .share-buttons { flex-wrap: wrap; gap: 8px; }
+      .share-btn-detail { padding: 8px 14px; font-size: 0.85rem; }
+      .video-section video { border-radius: 10px; }
+    }
+    @media (max-width: 480px) {
+      .main-image-wrapper img { height: 220px; }
+      .gallery-nav { width: 30px; height: 30px; font-size: 0.8rem; }
+      .gallery-nav.prev { right: 8px; }
+      .gallery-nav.next { left: 8px; }
+      .thumb { width: 50px; height: 50px; }
+      .detail-info h1 { font-size: 1.3rem; }
+      .detail-info .price { font-size: 1.3rem; }
+      .share-btn-detail { padding: 7px 12px; font-size: 0.8rem; }
     }
   </style>
 </head>
