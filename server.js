@@ -9,6 +9,20 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { initDatabase, run, get, all, getDbPath } = require('./database/init');
 
+// ===== CLOUDINARY (optional cloud storage) =====
+const CLOUDINARY_ENABLED = !!(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
+if (CLOUDINARY_ENABLED) {
+  const cloudinary = require('cloudinary').v2;
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+  });
+  console.log('Cloudinary: Enabled');
+} else {
+  console.log('Cloudinary: Disabled (using local storage)');
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -757,7 +771,7 @@ app.put('/api/users/:id/password', requireAuth, rateLimit(60 * 60 * 1000, 20), a
 
 // ===== UPLOAD ROUTES =====
 app.post('/api/upload', requireAuth, (req, res, next) => {
-  upload.single('image')(req, res, (err) => {
+  upload.single('image')(req, res, async (err) => {
     if (err) {
       if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(400).json({ error: 'الملف كبير جداً. الحد الأقصى 200 ميجابايت' });
@@ -765,12 +779,29 @@ app.post('/api/upload', requireAuth, (req, res, next) => {
       return res.status(400).json({ error: err.message || 'خطأ في رفع الملف' });
     }
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    if (CLOUDINARY_ENABLED) {
+      try {
+        const cloudinary = require('cloudinary').v2;
+        const result = await cloudinary.uploader.upload(req.file.path, {
+          folder: 'milano/products',
+          resource_type: 'auto'
+        });
+        fs.unlinkSync(req.file.path);
+        return res.json({ success: true, url: result.secure_url });
+      } catch (e) {
+        console.error('[CLOUDINARY ERROR]', e.message);
+        try { fs.unlinkSync(req.file.path); } catch(x) {}
+        return res.json({ success: true, url: '/uploads/' + req.file.filename });
+      }
+    }
+
     res.json({ success: true, url: '/uploads/' + req.file.filename });
   });
 });
 
 app.post('/api/upload/video', requireAuth, (req, res) => {
-  upload.single('video')(req, res, (err) => {
+  upload.single('video')(req, res, async (err) => {
     if (err) {
       if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(400).json({ error: 'الملف كبير جداً. الحد الأقصى 200 ميجابايت' });
@@ -778,6 +809,23 @@ app.post('/api/upload/video', requireAuth, (req, res) => {
       return res.status(400).json({ error: err.message || 'خطأ في رفع الملف' });
     }
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    if (CLOUDINARY_ENABLED) {
+      try {
+        const cloudinary = require('cloudinary').v2;
+        const result = await cloudinary.uploader.upload(req.file.path, {
+          folder: 'milano/videos',
+          resource_type: 'video'
+        });
+        fs.unlinkSync(req.file.path);
+        return res.json({ success: true, url: result.secure_url });
+      } catch (e) {
+        console.error('[CLOUDINARY VIDEO ERROR]', e.message);
+        try { fs.unlinkSync(req.file.path); } catch(x) {}
+        return res.json({ success: true, url: '/uploads/' + req.file.filename });
+      }
+    }
+
     res.json({ success: true, url: '/uploads/' + req.file.filename });
   });
 });
