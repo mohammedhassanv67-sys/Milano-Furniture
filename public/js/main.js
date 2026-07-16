@@ -1,6 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
   initNavbar();
-  initHeroParticles();
   loadSiteSettings().then(() => {
     loadHeroSlides();
     initHeroSlider();
@@ -140,24 +139,6 @@ function initHeroSlider() {
   resetInterval();
 }
 
-// ===== HERO PARTICLES =====
-function initHeroParticles() {
-  const container = document.getElementById('heroParticles');
-  if (!container) return;
-
-  for (let i = 0; i < 20; i++) {
-    const particle = document.createElement('div');
-    particle.className = 'hero-particle';
-    const size = Math.random() * 30 + 10;
-    particle.style.width = size + 'px';
-    particle.style.height = size + 'px';
-    particle.style.left = Math.random() * 100 + '%';
-    particle.style.animationDuration = (Math.random() * 15 + 10) + 's';
-    particle.style.animationDelay = (Math.random() * 10) + 's';
-    container.appendChild(particle);
-  }
-}
-
 // ===== TYPING EFFECT =====
 function initTypingEffect() {
   const el = document.getElementById('typingText');
@@ -229,12 +210,8 @@ async function loadProducts() {
   try {
     const params = new URLSearchParams();
     const searchInput = document.querySelector('.search-input');
-    const minPrice = document.getElementById('minPrice');
-    const maxPrice = document.getElementById('maxPrice');
 
     if (searchInput && searchInput.value) params.append('search', searchInput.value);
-    if (minPrice && minPrice.value) params.append('minPrice', minPrice.value);
-    if (maxPrice && maxPrice.value) params.append('maxPrice', maxPrice.value);
     params.append('available', 'true');
 
     const response = await fetch('/api/products?' + params.toString());
@@ -360,15 +337,6 @@ function initSearch() {
   searchInput.addEventListener('input', () => {
     clearTimeout(debounce);
     debounce = setTimeout(loadProducts, 400);
-  });
-
-  const minPrice = document.getElementById('minPrice');
-  const maxPrice = document.getElementById('maxPrice');
-  [minPrice, maxPrice].forEach(el => {
-    if (el) el.addEventListener('input', () => {
-      clearTimeout(debounce);
-      debounce = setTimeout(loadProducts, 400);
-    });
   });
 }
 

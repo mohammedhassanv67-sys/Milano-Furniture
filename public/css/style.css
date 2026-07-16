@@ -445,6 +445,9 @@ a { text-decoration: none; color: inherit; }
   display: grid; grid-template-columns: 1fr 1fr; gap: 50px; align-items: start;
 }
 
+.contact-map { margin-top: 20px; border-radius: 15px; overflow: hidden; }
+.contact-map iframe { width: 100%; height: 350px; border: none; border-radius: 15px; }
+
 .contact-form-wrapper {
   background: var(--light-gray); padding: 30px; border-radius: 15px;
 }
